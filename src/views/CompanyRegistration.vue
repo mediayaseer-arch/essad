@@ -16,14 +16,9 @@ const form = ref({
   ownerNameAr: '',
   email: '',
   mobile: '',
-  landline: '',
   category: '',
   country: '',
-  region: '',
-  website: '',
-  facebook: '',
-  xAccount: '',
-  instagram: ''
+  region: ''
 });
 
 const errors = ref<Record<string, string>>({});
@@ -370,21 +365,7 @@ const handleCancel = () => {
           <p v-if="errors.mobile" class="text-red-600 text-xs mt-1">{{ errors.mobile }}</p>
         </div>
 
-        <!-- 11. رقم الهاتف الأرضي -->
-        <div>
-          <label class="block text-[15px] font-semibold text-gray-800 mb-2">
-            رقم الهاتف الأرضي
-          </label>
-          <input
-            v-model="form.landline"
-            type="tel"
-            dir="ltr"
-            placeholder="+971 56 123 1234"
-            class="w-full h-12 border border-gray-200 rounded-md px-3.5 text-left text-gray-900 placeholder-gray-300 focus:outline-none focus:border-[#008a40] bg-white transition-colors"
-          />
-        </div>
-
-        <!-- 12. اختر الفئة* -->
+        <!-- اختر الفئة* -->
         <div>
           <label class="block text-[15px] font-semibold text-gray-800 mb-2">
             اختر الفئة<span class="text-red-600">*</span>
@@ -405,7 +386,7 @@ const handleCancel = () => {
           <p v-if="errors.category" class="text-red-600 text-xs mt-1">{{ errors.category }}</p>
         </div>
 
-        <!-- 13. الدولة* -->
+        <!-- الدولة* -->
         <div>
           <label class="block text-[15px] font-semibold text-gray-800 mb-2">
             الدولة<span class="text-red-600">*</span>
@@ -426,7 +407,7 @@ const handleCancel = () => {
           <p v-if="errors.country" class="text-red-600 text-xs mt-1">{{ errors.country }}</p>
         </div>
 
-        <!-- 14. منطقة* -->
+        <!-- منطقة* -->
         <div>
           <label class="block text-[15px] font-semibold text-gray-800 mb-2">
             منطقة<span class="text-red-600">*</span>
@@ -445,58 +426,6 @@ const handleCancel = () => {
             </div>
           </div>
           <p v-if="errors.region" class="text-red-600 text-xs mt-1">{{ errors.region }}</p>
-        </div>
-
-        <!-- 15. الموقع الإلكتروني -->
-        <div>
-          <label class="block text-[15px] font-semibold text-gray-800 mb-2">
-            الموقع الإلكتروني
-          </label>
-          <input
-            v-model="form.website"
-            type="text"
-            dir="ltr"
-            class="w-full h-12 border border-gray-200 rounded-md px-3.5 text-gray-900 focus:outline-none focus:border-[#008a40] bg-white transition-colors"
-          />
-        </div>
-
-        <!-- 16. فيسبوك -->
-        <div>
-          <label class="block text-[15px] font-semibold text-gray-800 mb-2">
-            فيسبوك
-          </label>
-          <input
-            v-model="form.facebook"
-            type="text"
-            dir="ltr"
-            class="w-full h-12 border border-gray-200 rounded-md px-3.5 text-gray-900 focus:outline-none focus:border-[#008a40] bg-white transition-colors"
-          />
-        </div>
-
-        <!-- 17. X -->
-        <div>
-          <label class="block text-[15px] font-semibold text-gray-800 mb-2">
-            X
-          </label>
-          <input
-            v-model="form.xAccount"
-            type="text"
-            dir="ltr"
-            class="w-full h-12 border border-gray-200 rounded-md px-3.5 text-gray-900 focus:outline-none focus:border-[#008a40] bg-white transition-colors"
-          />
-        </div>
-
-        <!-- 18. إنستجرام -->
-        <div>
-          <label class="block text-[15px] font-semibold text-gray-800 mb-2">
-            إنستجرام
-          </label>
-          <input
-            v-model="form.instagram"
-            type="text"
-            dir="ltr"
-            class="w-full h-12 border border-gray-200 rounded-md px-3.5 text-gray-900 focus:outline-none focus:border-[#008a40] bg-white transition-colors"
-          />
         </div>
 
         <!-- Action Buttons: إلغاء (Right) & متابعة (Left) -->

