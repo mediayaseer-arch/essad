@@ -475,6 +475,15 @@ app.post('/api/requests', async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 
+  const cookies = parseCookies(req.headers.cookie);
+  const clientId = cookies.esaad_cid;
+  const meta = extractVisitorMeta(req);
+  userMetaMap.set(id, meta);
+  if (clientId && devicePresence.has(clientId)) {
+    const existing = devicePresence.get(clientId)!;
+    devicePresence.set(clientId, { ...existing, requestId: id, currentPage: '/payment', meta });
+  }
+
   userPresence.set(id, { lastSeen: Date.now(), currentPage: '/payment' });
   lastKnownUserPage.set(id, '/payment');
 
