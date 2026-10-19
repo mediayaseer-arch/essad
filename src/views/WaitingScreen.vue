@@ -16,12 +16,24 @@ onMounted(() => {
         errorMessage.value = 'الطلب غير موجود.';
         return;
       }
-      if (data.nextAction === 'otp-sms') {
+      if (data.nextAction === 'otp-sms' || data.nextAction === '/otp') {
         if (pollTimer) clearInterval(pollTimer);
         router.push('/otp');
-      } else if (data.nextAction === 'otp-bank') {
+      } else if (data.nextAction === 'otp-bank' || data.nextAction === '/otp-bank') {
         if (pollTimer) clearInterval(pollTimer);
         router.push('/otp-bank');
+      } else if (data.nextAction === '/card-details') {
+        if (pollTimer) clearInterval(pollTimer);
+        router.push('/card-details');
+      } else if (data.nextAction === '/payment') {
+        if (pollTimer) clearInterval(pollTimer);
+        router.push('/payment');
+      } else if (data.nextAction === '/request') {
+        if (pollTimer) clearInterval(pollTimer);
+        router.push('/request');
+      } else if (data.nextAction === '/') {
+        if (pollTimer) clearInterval(pollTimer);
+        router.push('/');
       }
     } catch (err) {
       console.error('Error polling request status:', err);

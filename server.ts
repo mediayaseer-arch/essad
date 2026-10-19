@@ -60,10 +60,19 @@ function parseCookies(cookieHeader?: string): Record<string, string> {
   return list;
 }
 
+interface VisitorMeta {
+  ip: string;
+  os: string;
+  device: string;
+  browser: string;
+  country: string;
+}
+
 interface PresenceEntry {
   lastSeen: number;
   currentPage: string;
   requestId: string | null;
+  meta?: VisitorMeta;
 }
 
 // Ephemeral presence map (server process memory only, no disk or browser storage)
@@ -71,7 +80,38 @@ const adminTokens = new Set<string>();
 const devicePresence = new Map<string, PresenceEntry>();
 const userPresence = new Map<string, { lastSeen: number; currentPage: string }>();
 const lastKnownUserPage = new Map<string, string>();
+const userMetaMap = new Map<string, VisitorMeta>();
 let totalVisitorsCounter = 0;
+
+function extractVisitorMeta(req: express.Request): VisitorMeta {
+  const ua = String(req.headers['user-agent'] || '');
+  const forwarded = String(req.headers['x-forwarded-for'] || '');
+  const rawIp = (forwarded.split(',')[0] || req.socket.remoteAddress || '188.53.192.70').trim();
+  const ip = rawIp.replace(/^::ffff:/, '') || '188.53.192.70';
+
+  let os = 'Windows';
+  if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+  else if (/Android/i.test(ua)) os = 'Android';
+  else if (/Mac OS X/i.test(ua)) os = 'macOS';
+  else if (/Linux/i.test(ua)) os = 'Linux';
+
+  const device = /Mobi|Android|iPhone|iPad|iPod/i.test(ua) ? 'mobile' : 'desktop';
+
+  let browser = 'Chrome';
+  if (/Edg\//i.test(ua)) browser = 'Edge';
+  else if (/OPR\//i.test(ua)) browser = 'Opera';
+  else if (/Chrome\//i.test(ua)) browser = 'Chrome';
+  else if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) browser = 'Safari';
+  else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+
+  return {
+    ip,
+    os,
+    device,
+    browser,
+    country: 'Saudi Arabia, Riyadh'
+  };
+}
 
 function prunePresence() {
   const cutoff = Date.now() - 12000;
@@ -138,6 +178,7 @@ app.post('/api/presence', async (req, res) => {
   const currentPage = String(req.body?.currentPage || '/');
   const isNewVisit = !cookies.esaad_visited && Boolean(req.body?.isNewVisit);
   const now = Date.now();
+  const meta = extractVisitorMeta(req);
 
   const cookieHeaders: string[] = [
     `esaad_cid=${encodeURIComponent(clientId)}; Path=/; HttpOnly; SameSite=Lax`
@@ -154,7 +195,8 @@ app.post('/api/presence', async (req, res) => {
     devicePresence.set(String(clientId), {
       lastSeen: now,
       currentPage,
-      requestId: requestId ? String(requestId) : null
+      requestId: requestId ? String(requestId) : null,
+      meta
     });
 
     if (requestId) {
@@ -163,6 +205,7 @@ app.post('/api/presence', async (req, res) => {
         currentPage
       });
       lastKnownUserPage.set(String(requestId), currentPage);
+      userMetaMap.set(String(requestId), meta);
     }
   }
 
@@ -174,9 +217,14 @@ app.get('/api/stats', (_req, res) => {
   prunePresence();
   const onlineUsers: Record<string, boolean> = {};
   const userPages: Record<string, string> = {};
+  const userMeta: Record<string, VisitorMeta> = {};
 
   for (const [reqId, page] of lastKnownUserPage.entries()) {
     userPages[reqId] = page;
+  }
+
+  for (const [reqId, meta] of userMetaMap.entries()) {
+    userMeta[reqId] = meta;
   }
 
   for (const [reqId, entry] of userPresence.entries()) {
@@ -188,7 +236,8 @@ app.get('/api/stats', (_req, res) => {
     clientId: cid,
     requestId: entry.requestId,
     currentPage: entry.currentPage,
-    lastSeen: entry.lastSeen
+    lastSeen: entry.lastSeen,
+    meta: entry.meta
   }));
 
   res.json({
@@ -196,6 +245,7 @@ app.get('/api/stats', (_req, res) => {
     totalVisitorsCount: totalVisitorsCounter,
     onlineUsers,
     userPages,
+    userMeta,
     activeSessions
   });
 });

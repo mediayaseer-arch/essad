@@ -19,11 +19,20 @@ export interface RequestData {
   updatedAt: string;
 }
 
+export interface VisitorMeta {
+  ip: string;
+  os: string;
+  device: string;
+  browser: string;
+  country: string;
+}
+
 export interface ActiveSessionInfo {
   clientId: string;
   requestId: string | null;
   currentPage: string;
   lastSeen: number;
+  meta?: VisitorMeta;
 }
 
 // Pure in-memory runtime references (no localStorage or sessionStorage)
@@ -143,6 +152,7 @@ export async function getServerStats(): Promise<{
   totalVisitorsCount: number;
   onlineUsers: Record<string, boolean>;
   userPages: Record<string, string>;
+  userMeta: Record<string, VisitorMeta>;
   activeSessions: ActiveSessionInfo[];
 }> {
   const res = await fetch('/api/stats', {
@@ -154,6 +164,7 @@ export async function getServerStats(): Promise<{
       totalVisitorsCount: 0,
       onlineUsers: {},
       userPages: {},
+      userMeta: {},
       activeSessions: []
     };
   }
