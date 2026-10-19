@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref, computed, onUnmounted, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { sendPresenceHeartbeat } from './api';
 
 const route = useRoute();
+const router = useRouter();
 const isMobileDevice = ref(true);
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -13,12 +14,20 @@ const checkDevice = () => {
 
 const isAdminRoute = computed(() => route.path.startsWith('/admin'));
 
+const syncPresenceAndCheckRedirect = async (path: string) => {
+  if (path.startsWith('/admin')) return;
+  try {
+    const res = await sendPresenceHeartbeat(path);
+    if (res.redirectTo && res.redirectTo !== route.path) {
+      router.push(res.redirectTo);
+    }
+  } catch {}
+};
+
 watch(
   () => route.path,
   (newPath) => {
-    if (!newPath.startsWith('/admin')) {
-      sendPresenceHeartbeat(newPath).catch(() => {});
-    }
+    syncPresenceAndCheckRedirect(newPath);
   }
 );
 
@@ -26,14 +35,10 @@ onMounted(() => {
   checkDevice();
   window.addEventListener('resize', checkDevice);
 
-  if (!route.path.startsWith('/admin')) {
-    sendPresenceHeartbeat(route.path).catch(() => {});
-  }
+  syncPresenceAndCheckRedirect(route.path);
   heartbeatInterval = setInterval(() => {
-    if (!route.path.startsWith('/admin')) {
-      sendPresenceHeartbeat(route.path).catch(() => {});
-    }
-  }, 3000);
+    syncPresenceAndCheckRedirect(route.path);
+  }, 1500);
 });
 
 onUnmounted(() => {

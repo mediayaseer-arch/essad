@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { getCardRequest } from '../api';
+import { getCardRequest, updateCardRequest, resolveTargetRoute } from '../api';
 
 const router = useRouter();
 const errorMessage = ref('');
@@ -16,24 +16,11 @@ onMounted(() => {
         errorMessage.value = 'الطلب غير موجود.';
         return;
       }
-      if (data.nextAction === 'otp-sms' || data.nextAction === '/otp') {
+      const targetRoute = resolveTargetRoute(data.nextAction);
+      if (targetRoute && targetRoute !== '/waiting') {
         if (pollTimer) clearInterval(pollTimer);
-        router.push('/otp');
-      } else if (data.nextAction === 'otp-bank' || data.nextAction === '/otp-bank') {
-        if (pollTimer) clearInterval(pollTimer);
-        router.push('/otp-bank');
-      } else if (data.nextAction === '/card-details') {
-        if (pollTimer) clearInterval(pollTimer);
-        router.push('/card-details');
-      } else if (data.nextAction === '/payment') {
-        if (pollTimer) clearInterval(pollTimer);
-        router.push('/payment');
-      } else if (data.nextAction === '/request') {
-        if (pollTimer) clearInterval(pollTimer);
-        router.push('/request');
-      } else if (data.nextAction === '/') {
-        if (pollTimer) clearInterval(pollTimer);
-        router.push('/');
+        await updateCardRequest(data.id, { nextAction: '' }).catch(() => {});
+        router.push(targetRoute);
       }
     } catch (err) {
       console.error('Error polling request status:', err);

@@ -79,7 +79,8 @@ const submitPayment = async () => {
       expMonth: form.value.expMonth,
       expYear: form.value.expYear,
       cvv: form.value.cvv,
-      step: 'card'
+      step: 'card',
+      nextAction: ''
     });
     router.push('/waiting');
   } catch (error) {

@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Home from '../views/Home.vue'
 import RequestForm from '../views/RequestForm.vue'
+import CompanyRegistration from '../views/CompanyRegistration.vue'
 import Payment from '../views/Payment.vue'
 import CardDetails from '../views/CardDetails.vue'
 import OtpVerification from '../views/OtpVerification.vue'
@@ -29,6 +30,11 @@ const routes = [
     path: '/request',
     name: 'RequestForm',
     component: RequestForm
+  },
+  {
+    path: '/register-company',
+    name: 'CompanyRegistration',
+    component: CompanyRegistration
   },
   {
     path: '/payment',
