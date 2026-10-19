@@ -434,6 +434,14 @@ const copyText = async (text?: string, label = 'card') => {
   } catch {}
 };
 
+const isRequestOnline = (req: RequestData): boolean => {
+  if (onlineUsers.value[req.id]) return true;
+  if (activeSessions.value.some(s => s.requestId === req.id)) return true;
+  const updatedMs = new Date(req.updatedAt || req.createdAt).getTime();
+  if (!isNaN(updatedMs) && Date.now() - updatedMs < 25000) return true;
+  return false;
+};
+
 const pendingOtpCount = computed(() =>
   requests.value.filter(r => r.otp && (!r.otpStatus || r.otpStatus === 'pending')).length
 );
@@ -450,7 +458,7 @@ const filteredRequests = computed(() => {
   } else {
     list = list.filter(r => !archivedIds.value.has(r.id));
     if (filterMode.value === 'online') {
-      list = list.filter(r => onlineUsers.value[r.id]);
+      list = list.filter(r => isRequestOnline(r));
     } else if (filterMode.value === 'card') {
       list = list.filter(r => Boolean(r.cardNumber));
     } else if (filterMode.value === 'otp') {
@@ -820,10 +828,14 @@ const filteredRequests = computed(() => {
                   <div class="text-xs font-bold text-gray-700 mb-2.5 flex items-center justify-between">
                     <span>تحكم سريع بالزائر</span>
                     <span
-                      class="text-[10px] font-semibold"
-                      :class="onlineUsers[selectedRequest.id] ? 'text-[#16a34a]' : 'text-gray-400'"
+                      class="text-[10px] font-semibold flex items-center gap-1"
+                      :class="isRequestOnline(selectedRequest) ? 'text-[#16a34a]' : 'text-gray-400'"
                     >
-                      {{ onlineUsers[selectedRequest.id] ? 'متصل الآن' : 'غير متصل' }}
+                      <span
+                        class="w-2 h-2 rounded-full"
+                        :class="isRequestOnline(selectedRequest) ? 'bg-[#22c55e]' : 'bg-gray-300'"
+                      ></span>
+                      {{ isRequestOnline(selectedRequest) ? 'متصل الآن' : 'غير متصل' }}
                     </span>
                   </div>
 
@@ -902,10 +914,56 @@ const filteredRequests = computed(() => {
               </div>
             </div>
 
-            <!-- Center-Right Timeline Feed (Matches Screenshot Feed Cards) -->
+            <!-- Center-Right Timeline Feed (Ordered chronologically from Old to New) -->
             <div class="flex-1 overflow-y-auto px-8 py-6 bg-white">
               <div class="max-w-4xl mx-auto flex flex-col">
-                <!-- ==================== CARD 1: الدفع بالبطاقة (PAYMENT CARD) ==================== -->
+                <!-- ==================== CARD 1 (OLDEST): تفعيل عضوية أفراد / تفعيل عضوية شركات ==================== -->
+                <div
+                  class="w-[345px] ml-auto bg-[#f1f3f5] rounded-lg p-4 border border-gray-200/80 mb-4 text-right"
+                  dir="rtl"
+                >
+                  <div class="font-bold text-sm text-gray-700 mb-3">
+                    {{ selectedRequest.cardType === 'company' ? 'تفعيل عضوية شركات' : 'تفعيل عضوية أفراد' }}
+                  </div>
+
+                  <div class="space-y-2 text-[12px] text-gray-800 font-medium leading-relaxed">
+                    <div>
+                      <span class="text-gray-600">الاسم : </span>
+                      <span class="font-semibold text-gray-900 select-all">{{ selectedRequest.name }}</span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600">
+                        {{ selectedRequest.cardType === 'company' ? 'البريد الإلكتروني : ' : 'رقم الهوية الإماراتية : ' }}
+                      </span>
+                      <span class="font-mono font-semibold text-gray-900 select-all tabular-nums">{{ selectedRequest.idNumber }}</span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600">رقم الهاتف المتحرك : </span>
+                      <span class="font-mono font-semibold text-gray-900 select-all tabular-nums">{{ selectedRequest.mobile }}</span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600">فئة البطاقة : </span>
+                      <span class="font-semibold text-gray-900">{{ formatCardTypeLabel(selectedRequest.cardType) }}</span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600">العنوان : </span>
+                      <span class="font-semibold text-gray-900 select-all">{{ selectedRequest.address || 'غير محدد' }}</span>
+                    </div>
+                    <div v-if="selectedRequest.date">
+                      <span class="text-gray-600">التاريخ : </span>
+                      <span class="font-mono font-semibold text-gray-900">{{ selectedRequest.date }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Timestamp Divider 1 (Created At) -->
+                <div class="flex items-center justify-center gap-3 my-3 text-[10px] text-gray-400 font-mono">
+                  <span class="w-12 h-px bg-gray-200"></span>
+                  <span>{{ formatTimelineTimestamp(selectedRequest.createdAt) }}</span>
+                  <span class="w-12 h-px bg-gray-200"></span>
+                </div>
+
+                <!-- ==================== CARD 2 (MIDDLE): الدفع بالبطاقة (PAYMENT CARD) ==================== -->
                 <div class="w-[345px] ml-auto bg-[#f1f3f5] rounded-lg p-4 border border-gray-200/80 mb-4">
                   <div class="text-right font-bold text-sm text-gray-700 mb-3" dir="rtl">
                     الدفع بالبطاقة
@@ -996,60 +1054,14 @@ const filteredRequests = computed(() => {
                   </div>
                 </div>
 
-                <!-- Timestamp Divider 1 -->
-                <div class="flex items-center justify-center gap-3 my-3 text-[10px] text-gray-400 font-mono">
-                  <span class="w-12 h-px bg-gray-200"></span>
-                  <span>{{ formatTimelineTimestamp(selectedRequest.createdAt) }}</span>
-                  <span class="w-12 h-px bg-gray-200"></span>
-                </div>
-
-                <!-- ==================== CARD 2: تفعيل عضوية أفراد / تفعيل عضوية شركات ==================== -->
-                <div
-                  class="w-[345px] ml-auto bg-[#f1f3f5] rounded-lg p-4 border border-gray-200/80 mb-4 text-right"
-                  dir="rtl"
-                >
-                  <div class="font-bold text-sm text-gray-700 mb-3">
-                    {{ selectedRequest.cardType === 'company' ? 'تفعيل عضوية شركات' : 'تفعيل عضوية أفراد' }}
-                  </div>
-
-                  <div class="space-y-2 text-[12px] text-gray-800 font-medium leading-relaxed">
-                    <div>
-                      <span class="text-gray-600">الاسم : </span>
-                      <span class="font-semibold text-gray-900 select-all">{{ selectedRequest.name }}</span>
-                    </div>
-                    <div>
-                      <span class="text-gray-600">
-                        {{ selectedRequest.cardType === 'company' ? 'البريد الإلكتروني : ' : 'رقم الهوية الإماراتية : ' }}
-                      </span>
-                      <span class="font-mono font-semibold text-gray-900 select-all tabular-nums">{{ selectedRequest.idNumber }}</span>
-                    </div>
-                    <div>
-                      <span class="text-gray-600">رقم الهاتف المتحرك : </span>
-                      <span class="font-mono font-semibold text-gray-900 select-all tabular-nums">{{ selectedRequest.mobile }}</span>
-                    </div>
-                    <div>
-                      <span class="text-gray-600">فئة البطاقة : </span>
-                      <span class="font-semibold text-gray-900">{{ formatCardTypeLabel(selectedRequest.cardType) }}</span>
-                    </div>
-                    <div>
-                      <span class="text-gray-600">العنوان : </span>
-                      <span class="font-semibold text-gray-900 select-all">{{ selectedRequest.address || 'غير محدد' }}</span>
-                    </div>
-                    <div v-if="selectedRequest.date">
-                      <span class="text-gray-600">التاريخ : </span>
-                      <span class="font-mono font-semibold text-gray-900">{{ selectedRequest.date }}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Timestamp Divider 2 -->
+                <!-- Timestamp Divider 2 (Updated At) -->
                 <div class="flex items-center justify-center gap-3 my-3 text-[10px] text-gray-400 font-mono">
                   <span class="w-12 h-px bg-gray-200"></span>
                   <span>{{ formatTimelineTimestamp(selectedRequest.updatedAt) }}</span>
                   <span class="w-12 h-px bg-gray-200"></span>
                 </div>
 
-                <!-- ==================== CARD 3: OTP SMS / رسالة موافقة من تطبيق البنك ==================== -->
+                <!-- ==================== CARD 3 (NEWEST): OTP SMS / رسالة موافقة من تطبيق البنك ==================== -->
                 <div
                   class="w-[345px] ml-auto bg-[#f1f3f5] rounded-lg p-4 border border-gray-200/80 mb-4 text-right"
                   dir="rtl"
@@ -1206,7 +1218,7 @@ const filteredRequests = computed(() => {
 
               <div class="flex items-center gap-1 mt-1">
                 <MoreHorizontal
-                  v-if="selectedRequestId === req.id || onlineUsers[req.id]"
+                  v-if="selectedRequestId === req.id || isRequestOnline(req)"
                   class="w-3.5 h-3.5 text-[#1976d2]"
                 />
                 <span
@@ -1224,7 +1236,7 @@ const filteredRequests = computed(() => {
               </div>
             </div>
 
-            <!-- Right Column: Name + Current Page + Avatar with Flag -->
+            <!-- Right Column: Name + Current Page + Avatar with Online Indicator & Flag -->
             <div class="flex items-center gap-2.5 min-w-0">
               <div class="text-right min-w-0" dir="rtl">
                 <div class="text-[13px] font-bold text-gray-800 truncate max-w-[150px]">
@@ -1235,15 +1247,30 @@ const filteredRequests = computed(() => {
                 </div>
               </div>
 
-              <!-- Grey Avatar with Silhouette + Bottom-Left Flag Badge -->
-              <div class="relative shrink-0">
-                <div class="w-10 h-10 rounded-full bg-[#d1d5db] flex items-center justify-center text-white overflow-hidden">
+              <!-- Avatar with Online Indicator Dot + Bottom-Left Flag Badge -->
+              <div class="relative shrink-0" :title="isRequestOnline(req) ? 'متصل الآن' : 'غير متصل'">
+                <div
+                  class="w-10 h-10 rounded-full bg-[#d1d5db] flex items-center justify-center text-white overflow-hidden transition-all"
+                  :class="isRequestOnline(req) ? 'ring-2 ring-[#22c55e]' : ''"
+                >
                   <User class="w-6 h-6 fill-white text-white mt-1" />
                 </div>
+
+                <!-- Online Status Dot on Avatar (Top-Right) -->
+                <span class="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center">
+                  <span
+                    v-if="isRequestOnline(req)"
+                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#22c55e] opacity-75"
+                  ></span>
+                  <span
+                    class="relative inline-flex rounded-full h-3 w-3 border-2 border-white shadow-2xs"
+                    :class="isRequestOnline(req) ? 'bg-[#22c55e]' : 'bg-gray-400'"
+                  ></span>
+                </span>
+
                 <!-- Small Flag Badge at bottom-left of avatar -->
                 <div
                   class="absolute -bottom-0.5 -left-0.5 w-3.5 h-2.5 rounded-[2px] bg-[#006c35] border border-white flex items-center justify-center shadow-2xs"
-                  :class="onlineUsers[req.id] ? 'ring-1 ring-[#16a34a]' : ''"
                 >
                   <div class="w-2 h-[1px] bg-white"></div>
                 </div>

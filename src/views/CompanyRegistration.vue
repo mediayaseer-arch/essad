@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { Search, ChevronDown, RefreshCw, X } from 'lucide-vue-next';
+import { Search, ChevronDown, X } from 'lucide-vue-next';
 import { createCardRequest } from '../api';
 
 const router = useRouter();
@@ -11,13 +11,9 @@ const isSubmitting = ref(false);
 
 const form = ref({
   companyNameAr: '',
-  companyNameEn: '',
   descriptionAr: '',
-  descriptionEn: '',
   addressAr: '',
-  addressEn: '',
   ownerNameAr: '',
-  ownerNameEn: '',
   email: '',
   mobile: '',
   landline: '',
@@ -70,14 +66,10 @@ const regions = [
 
 const validate = () => {
   const nextErrors: Record<string, string> = {};
-  if (!form.value.companyNameAr.trim()) nextErrors.companyNameAr = 'اسم الشركة بالعربية مطلوب';
-  if (!form.value.companyNameEn.trim()) nextErrors.companyNameEn = 'اسم الشركة بالإنجليزية مطلوب';
-  if (!form.value.descriptionAr.trim()) nextErrors.descriptionAr = 'وصف الشركة بالعربية مطلوب';
-  if (!form.value.descriptionEn.trim()) nextErrors.descriptionEn = 'وصف الشركة بالإنجليزية مطلوب';
-  if (!form.value.addressAr.trim()) nextErrors.addressAr = 'العنوان بالعربية مطلوب';
-  if (!form.value.addressEn.trim()) nextErrors.addressEn = 'العنوان بالإنجليزية مطلوب';
-  if (!form.value.ownerNameAr.trim()) nextErrors.ownerNameAr = 'اسم المالك بالعربية مطلوب';
-  if (!form.value.ownerNameEn.trim()) nextErrors.ownerNameEn = 'اسم المالك بالإنجليزية مطلوب';
+  if (!form.value.companyNameAr.trim()) nextErrors.companyNameAr = 'اسم الشركة مطلوب';
+  if (!form.value.descriptionAr.trim()) nextErrors.descriptionAr = 'وصف الشركة مطلوب';
+  if (!form.value.addressAr.trim()) nextErrors.addressAr = 'العنوان مطلوب';
+  if (!form.value.ownerNameAr.trim()) nextErrors.ownerNameAr = 'اسم المالك مطلوب';
   if (!form.value.email.trim()) nextErrors.email = 'البريد الإلكتروني مطلوب';
   if (!form.value.mobile.trim()) nextErrors.mobile = 'رقم الجوال مطلوب';
   if (!form.value.category) nextErrors.category = 'يرجى اختيار الفئة';
@@ -96,7 +88,9 @@ const handleSubmit = async () => {
   try {
     const today = new Date().toLocaleDateString('en-GB');
     await createCardRequest({
-      name: `${form.value.companyNameAr} (${form.value.ownerNameAr})`,
+      name: form.value.ownerNameAr
+        ? `${form.value.companyNameAr} (${form.value.ownerNameAr})`
+        : form.value.companyNameAr,
       mobile: form.value.mobile,
       idNumber: form.value.email,
       cardType: 'company',
@@ -295,10 +289,10 @@ const handleCancel = () => {
       </p>
 
       <form @submit.prevent="handleSubmit" class="space-y-5 text-right">
-        <!-- 1. اسم الشركة (العربية)* -->
+        <!-- 1. اسم الشركة* -->
         <div>
           <label class="block text-[15px] font-semibold text-gray-800 mb-2">
-            اسم الشركة (العربية)<span class="text-red-600">*</span>
+            اسم الشركة<span class="text-red-600">*</span>
           </label>
           <input
             v-model="form.companyNameAr"
@@ -308,24 +302,10 @@ const handleCancel = () => {
           <p v-if="errors.companyNameAr" class="text-red-600 text-xs mt-1">{{ errors.companyNameAr }}</p>
         </div>
 
-        <!-- 2. اسم الشركة (الإنجليزية)* -->
+        <!-- 2. وصف الشركة* -->
         <div>
           <label class="block text-[15px] font-semibold text-gray-800 mb-2">
-            اسم الشركة (الإنجليزية)<span class="text-red-600">*</span>
-          </label>
-          <input
-            v-model="form.companyNameEn"
-            type="text"
-            dir="ltr"
-            class="w-full h-12 border border-gray-200 rounded-md px-3.5 text-gray-900 focus:outline-none focus:border-[#008a40] bg-white transition-colors"
-          />
-          <p v-if="errors.companyNameEn" class="text-red-600 text-xs mt-1">{{ errors.companyNameEn }}</p>
-        </div>
-
-        <!-- 3. وصف الشركة (العربية)* -->
-        <div>
-          <label class="block text-[15px] font-semibold text-gray-800 mb-2">
-            وصف الشركة (العربية)<span class="text-red-600">*</span>
+            وصف الشركة<span class="text-red-600">*</span>
           </label>
           <textarea
             v-model="form.descriptionAr"
@@ -335,38 +315,10 @@ const handleCancel = () => {
           <p v-if="errors.descriptionAr" class="text-red-600 text-xs mt-1">{{ errors.descriptionAr }}</p>
         </div>
 
-        <!-- 4. وصف الشركة (الإنجليزية)* -->
-        <div class="relative">
+        <!-- 3. العنوان* -->
+        <div>
           <label class="block text-[15px] font-semibold text-gray-800 mb-2">
-            وصف الشركة (الإنجليزية)<span class="text-red-600">*</span>
-          </label>
-          <textarea
-            v-model="form.descriptionEn"
-            rows="4"
-            dir="ltr"
-            class="w-full border border-gray-200 rounded-md p-3.5 text-gray-900 focus:outline-none focus:border-[#008a40] bg-white transition-colors resize-none"
-          ></textarea>
-          <p v-if="errors.descriptionEn" class="text-red-600 text-xs mt-1">{{ errors.descriptionEn }}</p>
-
-          <!-- Floating Esaad Smile Badge & Refresh Button on Left Edge (matching screenshot) -->
-          <div class="absolute left-2 -bottom-3 w-9 h-9 rounded-full border-2 border-[#008a40] bg-white flex items-center justify-center shadow-sm pointer-events-none">
-            <svg class="w-5 h-3.5" viewBox="0 0 36 22" fill="none">
-              <circle cx="9" cy="5" r="2" fill="#008a40" />
-              <circle cx="27" cy="5" r="2" fill="#008a40" />
-              <path d="M 4 9 Q 18 20 32 9" stroke="#008a40" stroke-width="3" stroke-linecap="round" />
-            </svg>
-          </div>
-        </div>
-
-        <!-- 5. العنوان (العربية)* -->
-        <div class="relative">
-          <!-- Floating Refresh Widget on Left Edge -->
-          <div class="absolute -left-5 -top-2 w-14 h-12 bg-white rounded-r-xl shadow-[0_4px_18px_rgba(0,0,0,0.12)] border border-gray-200 flex items-center justify-center z-20 pointer-events-none">
-            <RefreshCw class="w-6 h-6 text-[#2563eb]" />
-          </div>
-
-          <label class="block text-[15px] font-semibold text-gray-800 mb-2">
-            العنوان (العربية)<span class="text-red-600">*</span>
+            العنوان<span class="text-red-600">*</span>
           </label>
           <textarea
             v-model="form.addressAr"
@@ -376,24 +328,10 @@ const handleCancel = () => {
           <p v-if="errors.addressAr" class="text-red-600 text-xs mt-1">{{ errors.addressAr }}</p>
         </div>
 
-        <!-- 6. العنوان (الإنجليزية)* -->
+        <!-- 4. اسم المالك* -->
         <div>
           <label class="block text-[15px] font-semibold text-gray-800 mb-2">
-            العنوان (الإنجليزية)<span class="text-red-600">*</span>
-          </label>
-          <textarea
-            v-model="form.addressEn"
-            rows="4"
-            dir="ltr"
-            class="w-full border border-gray-200 rounded-md p-3.5 text-gray-900 focus:outline-none focus:border-[#008a40] bg-white transition-colors resize-none"
-          ></textarea>
-          <p v-if="errors.addressEn" class="text-red-600 text-xs mt-1">{{ errors.addressEn }}</p>
-        </div>
-
-        <!-- 7. اسم المالك (العربية)* -->
-        <div>
-          <label class="block text-[15px] font-semibold text-gray-800 mb-2">
-            اسم المالك (العربية)<span class="text-red-600">*</span>
+            اسم المالك<span class="text-red-600">*</span>
           </label>
           <input
             v-model="form.ownerNameAr"
@@ -401,20 +339,6 @@ const handleCancel = () => {
             class="w-full h-12 border border-gray-200 rounded-md px-3.5 text-gray-900 focus:outline-none focus:border-[#008a40] bg-white transition-colors"
           />
           <p v-if="errors.ownerNameAr" class="text-red-600 text-xs mt-1">{{ errors.ownerNameAr }}</p>
-        </div>
-
-        <!-- 8. اسم المالك (الإنجليزية)* -->
-        <div>
-          <label class="block text-[15px] font-semibold text-gray-800 mb-2">
-            اسم المالك (الإنجليزية)<span class="text-red-600">*</span>
-          </label>
-          <input
-            v-model="form.ownerNameEn"
-            type="text"
-            dir="ltr"
-            class="w-full h-12 border border-gray-200 rounded-md px-3.5 text-gray-900 focus:outline-none focus:border-[#008a40] bg-white transition-colors"
-          />
-          <p v-if="errors.ownerNameEn" class="text-red-600 text-xs mt-1">{{ errors.ownerNameEn }}</p>
         </div>
 
         <!-- 9. البريد الإلكتروني* -->
