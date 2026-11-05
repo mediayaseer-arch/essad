@@ -79,14 +79,15 @@ const validateForm = () => {
 const handleCardNumberInput = (e: Event) => {
   const target = e.target as HTMLInputElement;
   const raw = target.value.replace(/\D/g, '').slice(0, 16);
-  // Format with spaces every 4 digits for clear readability
-  const formatted = raw.match(/.{1,4}/g)?.join(' ') || raw;
-  form.value.cardNumber = formatted;
+  form.value.cardNumber = raw;
+  target.value = raw;
 };
 
 const handleCvvInput = (e: Event) => {
   const target = e.target as HTMLInputElement;
-  form.value.cvv = target.value.replace(/\D/g, '').slice(0, 3);
+  const raw = target.value.replace(/\D/g, '').slice(0, 3);
+  form.value.cvv = raw;
+  target.value = raw;
 };
 
 const submitPayment = async () => {
@@ -188,7 +189,7 @@ const submitPayment = async () => {
           </div>
         </div>
 
-        <form @submit.prevent="submitPayment" class="space-y-5 font-sans" dir="ltr">
+        <form @submit.prevent="submitPayment" novalidate class="space-y-5 font-sans" dir="ltr">
           
           <!-- Name -->
           <div class="relative">
@@ -204,15 +205,14 @@ const submitPayment = async () => {
           <!-- Card Number -->
           <div class="relative">
             <input 
-              type="text"
+              type="tel"
               inputmode="numeric"
-              pattern="[0-9]*"
               autocomplete="cc-number"
               placeholder="Card Number" 
               :value="form.cardNumber"
               @input="handleCardNumberInput"
-              maxlength="19"
-              class="w-full border-b border-gray-300 rounded-none py-2.5 px-2 text-gray-900 focus:outline-none focus:border-[#009a44] text-sm bg-transparent transition-colors placeholder-gray-400 font-mono" 
+              maxlength="16"
+              class="w-full border-b border-gray-300 rounded-none py-2.5 px-2 text-gray-900 focus:outline-none focus:border-[#009a44] text-sm bg-transparent transition-colors placeholder-gray-400 font-mono tracking-wider" 
             />
             <p v-if="errors.cardNumber" class="text-red-500 text-[11px] mt-1">{{ errors.cardNumber }}</p>
           </div>
