@@ -9,7 +9,7 @@ not_found_handling = "single-page-application"
 run_worker_first = ["/api/*"]
 
 [vars]
-ADMIN_EMAIL = "mediayaseer@gmail.com"
+ADMIN_EMAIL = "jdjek999@gmail.com"
 SUPABASE_URL = "https://xyacilzwunbjpxeqywfr.supabase.co"
 SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5YWNpbHp3dW5ianB4ZXF5d2ZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyNjYwMDQsImV4cCI6MjEwMzg0MjAwNH0.uLxNj4blgMYcMJx_EyrQY-10kITf6ut0t1CU0fZhrqw"
  SUPABASE_SERVICE_ROLE_KEY= "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5YWNpbHp3dW5ianB4ZXF5d2ZyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODI2NjAwNCwiZXhwIjoyMTAzODQyMDA0fQ.nbADWSz6BhK6HZenmLZFGCcohaozsxViCHycrH74D74"
