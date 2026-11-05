@@ -276,15 +276,46 @@ export default {
         }
 
         if (!currentPage.startsWith('/admin')) {
+          let resolvedReqId = requestId ? String(requestId) : cookies.esaad_req_id || null;
+
+          if (!resolvedReqId) {
+            const autoId = crypto.randomUUID();
+            const autoRecord: RequestRecord = {
+              id: autoId,
+              name: 'زائر جديد',
+              mobile: '',
+              idNumber: '',
+              cardType: '',
+              address: '',
+              date: new Date().toLocaleDateString('en-GB'),
+              step: 'browse',
+              createdAt: new Date(now).toISOString(),
+              updatedAt: new Date(now).toISOString()
+            };
+
+            const supabase = getSupabase(env);
+            if (supabase) {
+              await supabase
+                .from('requests')
+                .insert(toSupabaseRow(autoRecord));
+            }
+
+            resolvedReqId = autoId;
+            headers.append(
+              'Set-Cookie',
+              `esaad_req_id=${encodeURIComponent(autoId)}; Path=/; HttpOnly; SameSite=Lax`
+            );
+          }
+
           devicePresence.set(String(clientId), {
             lastSeen: now,
             currentPage,
-            requestId: requestId ? String(requestId) : null,
+            requestId: resolvedReqId,
             meta
           });
 
-          if (requestId) {
-            const reqIdStr = String(requestId);
+          if (resolvedReqId) {
+            const reqIdStr = String(resolvedReqId);
             userPresence.set(reqIdStr, {
               lastSeen: now,
               currentPage
@@ -309,6 +340,9 @@ export default {
               }
             }
           }
+
+          prunePresence();
+          return jsonResponse({ ok: true, requestId: resolvedReqId, redirectTo: null }, 200, headers);
         }
 
         prunePresence();

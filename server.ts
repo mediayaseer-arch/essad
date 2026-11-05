@@ -227,9 +227,37 @@ app.post('/api/presence', async (req, res) => {
 
   if (!currentPage.startsWith('/admin')) {
     const existingDevice = devicePresence.get(String(clientId));
-    const resolvedReqId = requestId
+    let resolvedReqId = requestId
       ? String(requestId)
-      : existingDevice?.requestId || null;
+      : existingDevice?.requestId || cookies.esaad_req_id || null;
+
+    // If visitor has no request yet (just opened the site), automatically create one
+    if (!resolvedReqId) {
+      const autoId = crypto.randomUUID();
+      const autoRecord: RequestRecord = {
+        id: autoId,
+        name: 'زائر جديد',
+        mobile: '',
+        idNumber: '',
+        cardType: '',
+        address: '',
+        date: new Date().toLocaleDateString('en-GB'),
+        step: 'browse',
+        createdAt: new Date(now).toISOString(),
+        updatedAt: new Date(now).toISOString()
+      };
+
+      const supabase = getSupabase();
+      if (supabase) {
+        supabase
+          .from('requests')
+          .insert(toSupabaseRow(autoRecord))
+          .then(() => {});
+      }
+
+      resolvedReqId = autoId;
+      cookieHeaders.push(buildCookie('esaad_req_id', autoId, req));
+    }
 
     devicePresence.set(String(clientId), {
       lastSeen: now,
@@ -265,6 +293,9 @@ app.post('/api/presence', async (req, res) => {
         }
       }
     }
+
+    prunePresence();
+    return res.json({ ok: true, requestId: resolvedReqId, redirectTo: null });
   }
 
   prunePresence();
