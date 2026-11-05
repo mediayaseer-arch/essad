@@ -68,12 +68,25 @@ const validateForm = () => {
     isValid = false;
   }
 
-  if (!/^\d{3,4}$/.test(form.value.cvv)) {
-    errors.value.cvv = 'Valid CVV required';
+  if (!/^\d{3}$/.test(form.value.cvv)) {
+    errors.value.cvv = 'CVV must be exactly 3 digits';
     isValid = false;
   }
 
   return isValid;
+};
+
+const handleCardNumberInput = (e: Event) => {
+  const target = e.target as HTMLInputElement;
+  const raw = target.value.replace(/\D/g, '').slice(0, 16);
+  // Format with spaces every 4 digits for clear readability
+  const formatted = raw.match(/.{1,4}/g)?.join(' ') || raw;
+  form.value.cardNumber = formatted;
+};
+
+const handleCvvInput = (e: Event) => {
+  const target = e.target as HTMLInputElement;
+  form.value.cvv = target.value.replace(/\D/g, '').slice(0, 3);
 };
 
 const submitPayment = async () => {
@@ -116,45 +129,23 @@ const submitPayment = async () => {
 <template>
   <div class="max-w-xl mx-auto bg-white min-h-screen flex flex-col font-sans text-gray-900">
     
-    <!-- Top Esaad Promotional Banner -->
-    <div class="w-full bg-[#040c06] relative overflow-hidden h-[115px] border-b border-[#009a44]/40 flex items-center shrink-0">
-      <div class="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,_rgba(57,181,74,0.28)_0%,_rgba(4,12,6,0.95)_75%)]"></div>
-      
-      <!-- Decorative Tilted Esaad Cards -->
-      <div class="absolute -bottom-6 left-4 flex gap-1.5 -rotate-12 opacity-90">
-        <div class="w-16 h-24 bg-gradient-to-br from-[#009a44] to-[#005e28] rounded-lg shadow-lg border border-[#39b54a]/50 p-1.5 flex flex-col justify-between">
-          <div class="w-3.5 h-2.5 rounded-xs bg-yellow-400/80"></div>
-          <span class="text-[7px] font-black text-white/90">esaad</span>
-        </div>
-        <div class="w-16 h-24 bg-gradient-to-br from-[#0c2614] to-[#051108] rounded-lg shadow-lg translate-y-3 border border-[#009a44]/40"></div>
-      </div>
+    <!-- Top Promotional Banner -->
+    <div class="w-full bg-white relative border-b border-gray-200 shrink-0 overflow-hidden shadow-xs">
+      <div class="relative w-full">
+        <!-- Back Navigation Button -->
+        <button
+          @click="router.push('/payment')"
+          aria-label="العودة"
+          class="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-white transition-colors cursor-pointer shadow-md"
+        >
+          <ArrowRight class="w-4 h-4" />
+        </button>
 
-      <div class="relative z-10 px-4 flex justify-between items-center w-full h-full">
-        <!-- Left Logo -->
-        <div class="flex items-center gap-3">
-          <div @click="router.push('/')" class="cursor-pointer flex flex-col items-center bg-black/40 px-2.5 py-1.5 rounded-xl border border-white/10">
-            <span class="text-[#39b54a] font-black text-base leading-none">إسعاد</span>
-            <span class="text-[#39b54a] font-extrabold text-xs leading-none">esaad</span>
-            <svg class="w-8 h-2.5" viewBox="0 0 60 18" fill="none">
-              <circle cx="14" cy="4" r="2" fill="#39b54a" />
-              <circle cx="46" cy="4" r="2" fill="#39b54a" />
-              <path d="M 6 6 Q 30 18 54 6" stroke="#39b54a" stroke-width="3.2" stroke-linecap="round" />
-            </svg>
-          </div>
-        </div>
-        
-        <!-- Right Arabic Promo Text -->
-        <div class="text-right flex flex-col items-end z-20" dir="rtl">
-          <div class="text-[11px] text-gray-200 font-semibold max-w-[200px] leading-relaxed">
-            استمتع بخصومات حصرية تصل إلى 70% لحاملي بطاقة إسعاد في جميع القطاعات
-          </div>
-          <div class="text-sm text-[#39b54a] font-bold mt-1 flex items-center gap-2">
-            <span>بوابة الدفع الآمن</span>
-            <button @click="router.push('/payment')" class="p-1 rounded-full bg-white/10 text-white hover:bg-white/20 cursor-pointer">
-              <ArrowRight class="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
+        <img
+          src="/assets/aistudio/235b9d67-4dec-40f1-81b7-61ea941636ef_0f5a8538.png"
+          alt="بنك أبوظبي الأول FAB - استمتع باسترداد نقدي بنسبة 30% عند الدفع باستخدام بطاقات بنك أبوظبي الأول"
+          class="w-full h-auto object-cover block"
+        />
       </div>
     </div>
 
@@ -178,14 +169,22 @@ const submitPayment = async () => {
             <CreditCard class="w-5 h-5 text-[#008a40]" />
             <span class="text-sm text-gray-900 font-bold tracking-tight">Pay by card</span>
           </div>
-          <div class="flex gap-2.5 items-center">
-            <!-- Mastercard -->
-            <div class="w-7 h-4 relative flex items-center justify-center">
-              <div class="w-3.5 h-3.5 bg-[#eb001b] rounded-full absolute left-1 opacity-90"></div>
-              <div class="w-3.5 h-3.5 bg-[#f79e1b] rounded-full absolute right-1 opacity-90"></div>
-            </div>
-            <!-- Visa -->
-            <div class="text-[11px] font-extrabold text-[#1434cb] italic tracking-tighter">VISA</div>
+          <div class="flex gap-2 items-center">
+            <img
+              src="/assets/aistudio/MasterCard_Logo.svg_5b05ba46.webp"
+              alt="Mastercard"
+              class="h-4 w-auto object-contain"
+            />
+            <img
+              src="/assets/aistudio/Visa_Inc._logo__2021_present_.svg_2c451104.webp"
+              alt="Visa"
+              class="h-3.5 w-auto object-contain"
+            />
+            <img
+              src="/assets/aistudio/American_Express_logo__2018__3b766b47.svg"
+              alt="American Express"
+              class="h-4 w-auto object-contain"
+            />
           </div>
         </div>
 
@@ -205,9 +204,13 @@ const submitPayment = async () => {
           <!-- Card Number -->
           <div class="relative">
             <input 
-              type="text" 
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              autocomplete="cc-number"
               placeholder="Card Number" 
-              v-model="form.cardNumber" 
+              :value="form.cardNumber"
+              @input="handleCardNumberInput"
               maxlength="19"
               class="w-full border-b border-gray-300 rounded-none py-2.5 px-2 text-gray-900 focus:outline-none focus:border-[#009a44] text-sm bg-transparent transition-colors placeholder-gray-400 font-mono" 
             />
@@ -271,10 +274,14 @@ const submitPayment = async () => {
           <!-- CVV -->
           <div class="relative">
             <input 
-              type="password" 
+              type="password"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              autocomplete="cc-csc"
               placeholder="CVV Code" 
-              v-model="form.cvv" 
-              maxlength="4"
+              :value="form.cvv"
+              @input="handleCvvInput"
+              maxlength="3"
               class="w-full border-b border-gray-300 rounded-none py-2.5 px-2 text-gray-900 focus:outline-none focus:border-[#009a44] text-sm bg-transparent transition-colors placeholder-gray-400 font-mono" 
             />
             <p v-if="errors.cvv" class="text-red-500 text-[11px] mt-1">{{ errors.cvv }}</p>

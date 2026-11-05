@@ -84,14 +84,22 @@ const goBack = () => {
         <div class="text-right pr-2 font-bold flex-1 text-gray-800 text-xs">
           الدفع الإلكتروني عبر البطاقة
         </div>
-        <div class="bg-gray-50 p-1 rounded-lg flex items-center gap-1.5 border border-gray-100" dir="ltr">
-          <div class="w-[32px] h-[20px] bg-gradient-to-br from-blue-500 to-blue-700 text-[4.5px] text-white font-bold flex items-center justify-center leading-tight text-center rounded-[3px]">AMERICAN<br/>EXPRESS</div>
-          <div class="w-[32px] h-[20px] bg-gradient-to-br from-blue-700 to-blue-900 text-[8px] text-white font-bold flex items-center justify-center italic rounded-[3px]">VISA</div>
-          <div class="w-[32px] h-[20px] bg-white border border-gray-200 flex items-center justify-center relative overflow-hidden rounded-[3px]">
-            <div class="w-[14px] h-[14px] bg-[#eb001b] rounded-full absolute -left-1 opacity-90"></div>
-            <div class="w-[14px] h-[14px] bg-[#f79e1b] rounded-full absolute -right-1 opacity-90"></div>
-            <span class="text-[4.5px] font-bold z-10 text-gray-900">MasterCard</span>
-          </div>
+        <div class="bg-gray-50 p-1.5 rounded-lg flex items-center gap-1.5 border border-gray-100" dir="ltr">
+          <img
+            src="/assets/aistudio/American_Express_logo__2018__3b766b47.svg"
+            alt="American Express"
+            class="w-[32px] h-[20px] object-contain rounded-[3px]"
+          />
+          <img
+            src="/assets/aistudio/Visa_Inc._logo__2021_present_.svg_2c451104.webp"
+            alt="Visa"
+            class="w-[32px] h-[20px] object-contain rounded-[3px]"
+          />
+          <img
+            src="/assets/aistudio/MasterCard_Logo.svg_5b05ba46.webp"
+            alt="Mastercard"
+            class="w-[32px] h-[20px] object-contain rounded-[3px]"
+          />
         </div>
       </div>
 
