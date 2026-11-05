@@ -153,7 +153,7 @@ const submitPayment = async () => {
     <!-- Order Summary Bar -->
     <div class="bg-[#07170b] text-white flex justify-between items-center px-5 py-3 shadow-xs border-b border-[#009a44]/30">
       <span class="text-sm border-b-2 border-[#39b54a] pb-0.5 inline-block tracking-wide font-semibold">Order summary</span>
-      <span class="text-base font-bold text-[#39b54a] tracking-wide tabular-nums">AED 1</span>
+      <span class="text-base font-bold text-[#39b54a] tracking-wide tabular-nums">AED 5</span>
     </div>
 
     <!-- Inline Status Banner if needed -->
@@ -294,7 +294,7 @@ const submitPayment = async () => {
               class="w-full flex items-center justify-center gap-2 bg-[#008a40] hover:bg-[#007335] text-white transition-colors font-bold text-sm py-3 rounded-xl shadow-md tracking-wide disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
             >
               <span v-if="isSubmitting" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-              <span v-else>PAY AED 1</span>
+              <span v-else>PAY AED 5</span>
             </button>
           </div>
         </form>
