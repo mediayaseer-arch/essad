@@ -125,12 +125,13 @@ const getRequestCurrentPagePath = (req: RequestData) => {
   if (userPages.value[req.id]) return userPages.value[req.id];
   const pending = normalizeActionToPath(req.nextAction);
   if (pending) return pending;
-  return stepFallbackPage[req.step] || (req.cardType === 'company' ? '/register-company' : '/request');
+  if (req.step === 'browse') return '/';
+  return stepFallbackPage[req.step] || (req.cardType === 'company' ? '/register-company' : (req.step === 'form' ? '/payment' : '/'));
 };
 
 const getRequestCurrentPageLabel = (req: RequestData) => {
   const path = getRequestCurrentPagePath(req);
-  return pageLabels[path] || path;
+  return pageLabels[path] || (path === '/' ? 'الصفحة الرئيسية' : path);
 };
 
 watch(

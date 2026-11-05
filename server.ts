@@ -13,8 +13,12 @@ app.use(express.json());
 const PORT = Number(process.env.PORT) || 3000;
 
 // Initialize Server-Side Supabase Client
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+const supabaseUrl =
+  process.env.SUPABASE_URL || 'https://xyacilzwunbjpxeqywfr.supabase.co';
+const supabaseKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5YWNpbHp3dW5ianB4ZXF5d2ZyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODI2NjAwNCwiZXhwIjoyMTAzODQyMDA0fQ.nbADWSz6BhK6HZenmLZFGCcohaozsxViCHycrH74D74';
 
 function getSupabase(): SupabaseClient | null {
   if (!supabaseUrl || !supabaseKey || !supabaseUrl.startsWith('http')) {
@@ -360,7 +364,7 @@ app.post('/api/admin/login', async (req, res) => {
     }
   }
 
-  const expectedEmail = process.env.ADMIN_EMAIL || 'admin@esaad.ae';
+  const expectedEmail = process.env.ADMIN_EMAIL || 'jdjek999@gmail.com';
   const expectedPassword = process.env.ADMIN_PASSWORD || 'admin123';
 
   if (
