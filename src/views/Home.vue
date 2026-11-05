@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChevronDown, Search, Menu, X, RefreshCw } from 'lucide-vue-next'
+import { ChevronDown, Search, Menu, X } from 'lucide-vue-next'
 
 const router = useRouter()
 
@@ -353,144 +353,17 @@ const filteredFaqs = computed(() => {
         تطبيق بطاقة إسعاد هو برنامج مميّز و فريد من نوعه يتضمّن عروضاً مميزة وأخرى حصرية، في قطاعات متعددة بما يساهم في تحقيق التوفير المالي.
       </p>
 
-      <!-- Collage Area: Tilted Esaad Card + Lifestyle Photos + Floating Refresh Widget -->
-      <div class="relative w-full h-[310px] my-2" dir="ltr">
-        
-        <!-- Top-Right Rounded Photo: Emirati Family Sightseeing -->
-        <div
-          @click="navigateToForm"
-          class="absolute right-6 top-0 w-[148px] h-[162px] rounded-2xl overflow-hidden shadow-lg border border-gray-100 z-10 cursor-pointer bg-[#dce8f2]"
-        >
-          <svg viewBox="0 0 150 165" class="w-full h-full object-cover">
-            <defs>
-              <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#c9dff2" />
-                <stop offset="100%" stop-color="#eef5fa" />
-              </linearGradient>
-            </defs>
-            <rect width="150" height="165" fill="url(#skyGrad)" />
-            <!-- Architectural arch/balcony backdrop -->
-            <path d="M0 30 Q45 10 95 0 L150 0 L150 165 L0 165 Z" fill="#e6ecf2" opacity="0.6" />
-            <line x1="15" y1="0" x2="85" y2="165" stroke="#9ab0c7" stroke-width="1.5" opacity="0.5" />
-            <!-- Person 1 (Right Emirati Man in White Kandura & Ghutra) -->
-            <path d="M88 78 Q112 76 124 160 L72 160 Z" fill="#ffffff" />
-            <ellipse cx="102" cy="58" rx="13" ry="15" fill="#d59b78" />
-            <path d="M88 58 Q102 68 112 58 L112 68 Q102 74 90 68 Z" fill="#3a2618" />
-            <path d="M84 48 Q102 36 120 50 L125 98 L112 96 L110 56 L88 56 Z" fill="#ffffff" />
-            <ellipse cx="103" cy="45" rx="15" ry="4" fill="#1a1a1a" />
-            <!-- Raising arm pointing -->
-            <path d="M95 85 L45 68 L48 58 L104 75 Z" fill="#f8fafc" />
-            <!-- Person 2 (Center Man in White Kandura) -->
-            <path d="M40 82 Q62 82 72 162 L24 162 Z" fill="#f1f5f9" />
-            <ellipse cx="52" cy="63" rx="12" ry="14" fill="#c98e6b" />
-            <path d="M38 52 Q52 42 66 52 L68 95 L36 95 Z" fill="#ffffff" />
-            <ellipse cx="52" cy="49" rx="13" ry="3.5" fill="#1a1a1a" />
-            <!-- Young Boy in Front with Yellow Cap -->
-            <path d="M85 130 Q105 128 115 165 L75 165 Z" fill="#1e293b" />
-            <circle cx="96" cy="112" r="12" fill="#dfab8b" />
-            <path d="M83 108 Q96 96 110 108 Z" fill="#facc15" />
-            <path d="M76 108 L98 108 L96 112 L75 111 Z" fill="#eab308" />
-          </svg>
-        </div>
-
-        <!-- Left Tilted Green Esaad Card -->
-        <div
-          @click="navigateToForm"
-          class="absolute left-3 top-10 w-[198px] h-[126px] rounded-xl shadow-xl z-10 transform -rotate-[14deg] cursor-pointer overflow-hidden border border-[#2ebd59]/40"
-          style="background: linear-gradient(135deg, #009944 0%, #007b36 55%, #005e28 100%);"
-        >
-          <!-- Subtle card wave pattern -->
-          <svg class="absolute inset-0 w-full h-full opacity-20" viewBox="0 0 200 130" fill="none">
-            <path d="M-20 110 Q 60 50 220 90" stroke="#7ce895" stroke-width="1" />
-            <path d="M-20 120 Q 70 60 220 100" stroke="#7ce895" stroke-width="1" />
-            <path d="M-20 100 Q 50 40 220 80" stroke="#7ce895" stroke-width="1" />
-          </svg>
-
-          <!-- Gold Chip on Right -->
-          <div class="absolute right-4 top-10 w-8 h-6 rounded-sm bg-gradient-to-br from-[#f6d365] to-[#cda349] border border-yellow-600/50 flex items-center justify-center">
-            <div class="w-5 h-3.5 border border-yellow-800/40 rounded-xs"></div>
-          </div>
-
-          <!-- Center Esaad White/Light-Green Emblem -->
-          <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span class="text-[#a3e6b5] font-black text-xl leading-none">إسعاد</span>
-            <span class="text-[#a3e6b5] font-extrabold text-lg leading-none -mt-0.5">esaad</span>
-            <svg class="w-12 h-3.5 -mt-0.5" viewBox="0 0 60 18" fill="none">
-              <circle cx="14" cy="4" r="2" fill="#a3e6b5" />
-              <circle cx="46" cy="4" r="2" fill="#a3e6b5" />
-              <path d="M 6 6 Q 30 18 54 6" stroke="#a3e6b5" stroke-width="3" stroke-linecap="round" />
-            </svg>
-          </div>
-
-          <!-- Card Holder Name & Number at Bottom Left -->
-          <div class="absolute bottom-2.5 left-3.5 text-left leading-tight">
-            <div class="text-[8px] font-bold tracking-wider text-[#b6f0c6] uppercase">ESAAD CARD HOLDER NAME</div>
-            <div class="text-[7px] font-mono text-[#9be2b0] tracking-wider">784-1234-1234567-1</div>
-          </div>
-        </div>
-
-        <!-- Center Overlapping Rounded Photo: Cafe Meeting -->
-        <div
-          @click="navigateToForm"
-          class="absolute left-[155px] top-[112px] w-[112px] h-[118px] rounded-2xl overflow-hidden shadow-xl border-2 border-white z-20 cursor-pointer bg-[#2c343c]"
-        >
-          <svg viewBox="0 0 120 125" class="w-full h-full object-cover">
-            <!-- Window & Cafe Background -->
-            <rect width="120" height="125" fill="#374151" />
-            <rect x="12" y="0" width="60" height="75" fill="#d1fae5" opacity="0.35" />
-            <!-- Left Woman in Black Abaya & Shayla -->
-            <path d="M12 52 Q30 50 38 115 L5 115 Z" fill="#111827" />
-            <circle cx="24" cy="42" r="8" fill="#d6a284" />
-            <path d="M14 34 Q24 28 32 38 L34 62 L12 60 Z" fill="#0f172a" />
-            <!-- Center Woman in Black Abaya -->
-            <path d="M40 50 Q55 48 64 105 L34 105 Z" fill="#182232" />
-            <circle cx="50" cy="40" r="7.5" fill="#d6a284" />
-            <path d="M41 33 Q50 28 58 36 L60 58 L40 58 Z" fill="#090d16" />
-            <!-- Right Man in White Kandura -->
-            <path d="M78 48 Q98 48 112 115 L68 115 Z" fill="#f8fafc" />
-            <circle cx="90" cy="36" r="8.5" fill="#c68b68" />
-            <path d="M79 27 Q90 20 102 29 L106 64 L76 62 Z" fill="#ffffff" />
-            <!-- Cafe Table in Foreground -->
-            <path d="M5 100 L115 88 L120 125 L0 125 Z" fill="#b89f82" />
-            <rect x="44" y="92" width="12" height="8" rx="1" fill="#ffffff" />
-            <circle cx="72" cy="96" r="5" fill="#f3f4f6" />
-          </svg>
-        </div>
-
-        <!-- Bottom-Right Small Rounded Photo: Handshake -->
-        <div
-          @click="navigateToForm"
-          class="absolute right-[70px] bottom-2 w-[78px] h-[78px] rounded-2xl overflow-hidden shadow-md border border-gray-100 z-10 cursor-pointer bg-[#e0f2fe]"
-        >
-          <svg viewBox="0 0 80 80" class="w-full h-full object-cover">
-            <rect width="80" height="80" fill="#dbeafe" />
-            <rect x="8" y="0" width="64" height="80" fill="#eff6ff" />
-            <!-- Left Arm in White Kandura Sleeve -->
-            <path d="M0 32 L34 40 L30 52 L0 46 Z" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" />
-            <!-- Right Arm in Dark Suit Sleeve -->
-            <path d="M80 28 L44 38 L48 50 L80 42 Z" fill="#1e293b" />
-            <!-- Clasped Hands in Center -->
-            <ellipse cx="40" cy="43" rx="9" ry="6" fill="#d29976" />
-          </svg>
-        </div>
-
-        <!-- Green Circle Smile Icon on Right of Bottom Photo -->
-        <div class="absolute right-3 top-[175px] w-9 h-9 rounded-full bg-[#009a44] flex items-center justify-center shadow-md">
-          <svg class="w-6 h-4" viewBox="0 0 36 22" fill="none">
-            <circle cx="9" cy="5" r="2" fill="white" />
-            <circle cx="27" cy="5" r="2" fill="white" />
-            <path d="M 4 9 Q 18 20 32 9" stroke="white" stroke-width="3" stroke-linecap="round" />
-          </svg>
-        </div>
-
-        <!-- Floating White Square Refresh/Accessibility Button on Far Right -->
-        <button
-          @click="navigateToForm"
-          aria-label="تحديث"
-          class="absolute -right-5 top-[210px] w-14 h-12 bg-white rounded-l-xl shadow-[0_4px_20px_rgba(0,0,0,0.15)] border border-gray-100 flex items-center justify-center z-30 cursor-pointer hover:bg-gray-50"
-        >
-          <RefreshCw class="w-6 h-6 text-[#2563eb] stroke-[2.2]" />
-        </button>
+      <!-- About Esaad Image -->
+      <div
+        @click="navigateToForm"
+        class="relative w-full my-2 cursor-pointer flex items-center justify-center"
+        dir="ltr"
+      >
+        <img
+          src="/assets/aistudio/mainAbout-newImg__1__1_f72bbe8c.png"
+          alt="عن برنامج إسعاد"
+          class="w-full h-auto object-contain"
+        />
       </div>
 
       <!-- Features List Under Collage -->
@@ -630,44 +503,17 @@ const filteredFaqs = computed(() => {
       <!-- Horizontal News Cards Strip -->
       <div class="flex gap-4 overflow-x-auto px-5 pb-4 snap-x snap-mandatory no-scrollbar">
         
-        <!-- News Card 1 (Main Right Card in Screenshot) -->
+        <!-- News Card 1 -->
         <article
           @click="navigateToForm"
           class="min-w-[260px] max-w-[260px] bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.06)] border border-gray-100 overflow-hidden snap-start shrink-0 cursor-pointer"
         >
           <div class="w-full h-40 bg-[#d5e3ec] relative overflow-hidden">
-            <!-- Custom SVG Illustration of the 5 Officials Ceremony Photo -->
-            <svg viewBox="0 0 260 160" class="w-full h-full object-cover">
-              <!-- Indoor Wall & Green Esaad Partition -->
-              <rect width="260" height="160" fill="#e2e8f0" />
-              <rect x="0" y="0" width="95" height="160" fill="#0d6e38" />
-              <rect x="115" y="15" width="75" height="115" fill="#cbd5e1" stroke="#94a3b8" stroke-width="2" />
-              <!-- 5 Officials standing left-to-right -->
-              <!-- 1. Left Woman in Maroon Hijab & Black Abaya -->
-              <path d="M12 85 Q28 83 36 160 L4 160 Z" fill="#18181b" />
-              <circle cx="22" cy="66" r="9" fill="#e2b296" />
-              <path d="M12 58 Q22 50 32 58 L33 88 L11 88 Z" fill="#4c1d24" />
-              <!-- 2. Woman in Light Gray Suit -->
-              <path d="M46 82 Q62 82 70 160 L38 160 Z" fill="#d1d5db" />
-              <circle cx="55" cy="62" r="9" fill="#f3cbb2" />
-              <path d="M44 54 Q55 45 66 56 L68 82 L43 82 Z" fill="#d6b485" />
-              <!-- 3. Man in Gray Suit -->
-              <path d="M82 75 Q102 75 110 160 L72 160 Z" fill="#9ca3af" />
-              <rect x="87" y="75" width="10" height="35" fill="#1e293b" />
-              <circle cx="92" cy="54" r="10" fill="#e5b89b" />
-              <!-- 4. Emirati Official in White Kandura & Ghutra -->
-              <path d="M158 74 Q182 74 194 160 L144 160 Z" fill="#ffffff" />
-              <circle cx="170" cy="54" r="10" fill="#d49e7d" />
-              <path d="M156 44 Q170 35 184 44 L188 86 L152 86 Z" fill="#ffffff" />
-              <ellipse cx="170" cy="42" rx="12" ry="3" fill="#111827" />
-              <!-- 5. Right Woman in Black Abaya holding Award Plaque -->
-              <path d="M210 78 Q236 78 248 160 L198 160 Z" fill="#111827" />
-              <circle cx="224" cy="56" r="9.5" fill="#deb092" />
-              <path d="M212 46 Q224 38 236 48 L240 86 L208 86 Z" fill="#09090b" />
-              <!-- Award Box held in hands -->
-              <rect x="208" y="96" width="26" height="28" rx="2" fill="#7c2d12" stroke="#f59e0b" stroke-width="1.5" />
-              <circle cx="221" cy="110" r="6" fill="#fbbf24" />
-            </svg>
+            <img
+              src="/assets/aistudio/595b0e5c-12e0-415e-bd0e-6a7364ede602_fd6bd06d.jpeg"
+              alt="مذكرة تفاهم بطاقة إسعاد"
+              class="w-full h-full object-cover"
+            />
           </div>
           <div class="p-4 text-right">
             <div class="text-gray-500 text-xs mb-2 font-sans">Tuesday 29 Sep 2026</div>
@@ -680,37 +526,48 @@ const filteredFaqs = computed(() => {
           </div>
         </article>
 
-        <!-- News Card 2 (Left Card in Screenshot) -->
+        <!-- News Card 2 (Talabat UAE) -->
         <article
           @click="navigateToForm"
           class="min-w-[260px] max-w-[260px] bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.06)] border border-gray-100 overflow-hidden snap-start shrink-0 cursor-pointer"
         >
           <div class="w-full h-40 bg-[#e5eef4] relative overflow-hidden">
-            <!-- Custom SVG Illustration of the Official with Laptop & Banner -->
-            <svg viewBox="0 0 260 160" class="w-full h-full object-cover">
-              <rect width="260" height="160" fill="#f1f5f9" />
-              <!-- Background Rollup Banner -->
-              <rect x="65" y="8" width="135" height="115" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" />
-              <circle cx="115" cy="30" r="10" fill="#dcfce7" />
-              <text x="165" y="34" fill="#ea580c" font-size="11" font-weight="800">talabat</text>
-              <!-- Official in White Kandura & Ghutra at Desk -->
-              <path d="M100 78 Q135 78 152 145 L85 145 Z" fill="#ffffff" />
-              <circle cx="120" cy="54" r="12" fill="#c98e6b" />
-              <path d="M104 42 Q120 32 136 42 L142 90 L98 90 Z" fill="#ffffff" />
-              <ellipse cx="120" cy="40" rx="14" ry="3.5" fill="#111827" />
-              <!-- Laptop on Desk -->
-              <rect x="0" y="132" width="260" height="28" fill="#cbd5e1" />
-              <rect x="135" y="102" width="46" height="30" rx="3" fill="#1e293b" />
-              <circle cx="158" cy="117" r="3" fill="#94a3b8" />
-            </svg>
+            <img
+              src="/assets/aistudio/588fc40f-74bb-4793-a34f-f82599e4a82d_0f6e5b1d.jpeg"
+              alt="توقيع مذكرة تعاون بين شرطة دبي وشركة طلبات الإمارات"
+              class="w-full h-full object-cover"
+            />
           </div>
           <div class="p-4 text-right">
             <div class="text-gray-500 text-xs mb-2 font-sans">Wednesday 23 Sep 2026</div>
             <h3 class="text-[#008a40] font-extrabold text-[17px] leading-snug mb-2">
-              شراكة استراتيجية لتعزيز عروض التوصيل والخدمات...
+              شراكة استراتيجية مع شركة طلبات الإمارات لتعزيز العروض...
             </h3>
             <p class="text-gray-700 text-xs leading-relaxed">
-              وقّع مركز بطاقة إسعاد اتفاقية تعاون مشترك لتوفير خصومات حصرية لحاملي البطاقة...
+              وقّع مركز بطاقة إسعاد في القيادة العامة لشرطة دبي مذكرة تعاون مع شركة طلبات الإمارات...
+            </p>
+          </div>
+        </article>
+
+        <!-- News Card 3 (TKE Elevators) -->
+        <article
+          @click="navigateToForm"
+          class="min-w-[260px] max-w-[260px] bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.06)] border border-gray-100 overflow-hidden snap-start shrink-0 cursor-pointer"
+        >
+          <div class="w-full h-40 bg-[#e5eef4] relative overflow-hidden">
+            <img
+              src="/assets/aistudio/9d3d4944-47ec-453d-b512-a77c110e349a_df5a5b95.jpeg"
+              alt="توقيع مذكرة تعاون بين شرطة دبي وتي كيه اليفيتور الإمارات"
+              class="w-full h-full object-cover"
+            />
+          </div>
+          <div class="p-4 text-right">
+            <div class="text-gray-500 text-xs mb-2 font-sans">Monday 14 Sep 2026</div>
+            <h3 class="text-[#008a40] font-extrabold text-[17px] leading-snug mb-2">
+              مذكرة تعاون بين القيادة العامة لشرطة دبي وتي كيه اليفيتور...
+            </h3>
+            <p class="text-gray-700 text-xs leading-relaxed">
+              وقّع مركز بطاقة إسعاد مذكرة تعاون مشترك لتقديم مزايا وخصومات حصرية لحاملي البطاقة...
             </p>
           </div>
         </article>
@@ -774,38 +631,14 @@ const filteredFaqs = computed(() => {
           <div class="flex flex-col items-end gap-4">
             <div
               @click="navigateToForm"
-              class="w-20 h-20 bg-white p-1.5 rounded-xl shadow-md cursor-pointer"
+              class="w-20 h-20 bg-white p-1.5 rounded-xl shadow-md cursor-pointer overflow-hidden"
               title="مسح رمز الاستجابة السريعة"
             >
-              <!-- Crisp SVG QR Code -->
-              <svg viewBox="0 0 100 100" class="w-full h-full fill-black">
-                <path d="M5,5 h28 v28 h-28 z M11,11 v16 h16 v-16 z M15,15 h8 v8 h-8 z" />
-                <path d="M67,5 h28 v28 h-28 z M73,11 v16 h16 v-16 z M77,15 h8 v8 h-8 z" />
-                <path d="M5,67 h28 v28 h-28 z M11,73 v16 h16 v-16 z M15,77 h8 v8 h-8 z" />
-                <rect x="39" y="5" width="6" height="6" />
-                <rect x="51" y="5" width="10" height="6" />
-                <rect x="39" y="17" width="12" height="6" />
-                <rect x="45" y="27" width="6" height="12" />
-                <rect x="57" y="21" width="6" height="12" />
-                <rect x="5" y="39" width="12" height="6" />
-                <rect x="23" y="39" width="10" height="6" />
-                <rect x="11" y="51" width="6" height="10" />
-                <rect x="27" y="49" width="12" height="6" />
-                <rect x="45" y="45" width="10" height="10" />
-                <rect x="61" y="39" width="6" height="12" />
-                <rect x="73" y="39" width="12" height="6" />
-                <rect x="89" y="45" width="6" height="12" />
-                <rect x="39" y="61" width="12" height="6" />
-                <rect x="57" y="57" width="10" height="12" />
-                <rect x="73" y="53" width="6" height="14" />
-                <rect x="83" y="63" width="12" height="6" />
-                <rect x="39" y="73" width="6" height="14" />
-                <rect x="51" y="75" width="12" height="6" />
-                <rect x="67" y="73" width="10" height="10" />
-                <rect x="83" y="75" width="12" height="8" />
-                <rect x="45" y="89" width="16" height="6" />
-                <rect x="69" y="89" width="26" height="6" />
-              </svg>
+              <img
+                src="/assets/aistudio/QRCode_2ed9a1ff.png"
+                alt="QR Code"
+                class="w-full h-full object-contain"
+              />
             </div>
 
             <!-- Official App Store Badge Button -->
@@ -825,43 +658,16 @@ const filteredFaqs = computed(() => {
           </div>
         </div>
 
-        <!-- Left Column in RTL: Realistic iPhone Mockup with Dubai Skyline & Esaad Logo -->
+        <!-- Left Column in RTL: Uploaded Mobile App Image -->
         <div
           @click="navigateToForm"
-          class="w-[125px] h-[250px] bg-[#12161f] rounded-[24px] p-1.5 shadow-2xl border-[2.5px] border-gray-700 shrink-0 relative overflow-hidden cursor-pointer"
+          class="w-[130px] shrink-0 relative cursor-pointer flex items-center justify-center"
         >
-          <!-- iPhone Notch -->
-          <div class="absolute top-1.5 left-1/2 -translate-x-1/2 w-12 h-3 bg-black rounded-b-lg z-20"></div>
-
-          <!-- Screen Content: Dusk City Skyline & Esaad Logo -->
-          <div class="w-full h-full rounded-[19px] overflow-hidden relative bg-gradient-to-b from-[#1a2436] via-[#3a2d28] to-[#121318] flex flex-col items-center justify-center">
-            <!-- Status bar time -->
-            <div class="absolute top-1.5 left-2.5 text-[7px] text-white/80 font-mono">9:41</div>
-
-            <!-- City Skyline Silhouette SVG -->
-            <svg viewBox="0 0 120 240" class="absolute inset-0 w-full h-full object-cover opacity-55">
-              <!-- Burj Khalifa & Downtown Towers -->
-              <polygon points="58,25 60,25 63,190 55,190" fill="#0d131a" />
-              <rect x="20" y="95" width="12" height="95" fill="#111822" />
-              <rect x="35" y="110" width="14" height="80" fill="#17202c" />
-              <rect x="70" y="85" width="15" height="105" fill="#111822" />
-              <rect x="88" y="105" width="14" height="85" fill="#161f2c" />
-              <!-- Illuminated Highway Trails at Bottom -->
-              <path d="M 10 240 L 55 170 L 65 170 L 110 240" fill="none" stroke="#f59e0b" stroke-width="1.5" opacity="0.7" />
-              <path d="M 30 240 L 58 175 L 62 175 L 90 240" fill="none" stroke="#fef08a" stroke-width="1" opacity="0.8" />
-            </svg>
-
-            <!-- Center Esaad Logo on Phone Screen -->
-            <div class="relative z-10 flex flex-col items-center">
-              <div class="text-[#a3e635] font-black text-base leading-none">إسعاد</div>
-              <div class="text-[#a3e635] font-extrabold text-sm leading-none">esaad</div>
-              <svg class="w-9 h-3" viewBox="0 0 60 18" fill="none">
-                <circle cx="14" cy="4" r="2" fill="#a3e635" />
-                <circle cx="46" cy="4" r="2" fill="#a3e635" />
-                <path d="M 6 6 Q 30 18 54 6" stroke="#a3e635" stroke-width="3.2" stroke-linecap="round" />
-              </svg>
-            </div>
-          </div>
+          <img
+            src="/assets/aistudio/mobileApp_ae63f798.png"
+            alt="تطبيق إسعاد"
+            class="w-full h-auto object-contain drop-shadow-2xl"
+          />
         </div>
 
       </div>
@@ -890,58 +696,12 @@ const filteredFaqs = computed(() => {
       </div>
 
       <!-- Dubai Police Partner Logos Strip -->
-      <div class="px-4 py-6 flex items-center justify-between gap-2 border-t border-gray-200/60" dir="ltr">
-        
-        <!-- 1. SPS Smart Police Station (Leftmost in LTR / Rightmost in visual check) -->
-        <div class="bg-[#e30613] text-white px-2 py-1.5 rounded-xs flex flex-col items-center justify-center shrink-0 w-14 h-11 shadow-xs">
-          <span class="font-black text-lg leading-none tracking-tighter">SPS</span>
-          <span class="text-[4.5px] font-bold tracking-tight uppercase mt-0.5">SMART POLICE STATION</span>
-        </div>
-
-        <!-- 2. Tourist Security Shield -->
-        <div class="flex items-center justify-center shrink-0 w-12 h-12">
-          <svg viewBox="0 0 50 50" class="w-11 h-11">
-            <circle cx="25" cy="25" r="22" fill="#e6f4ec" stroke="#008a40" stroke-width="1.5" stroke-dasharray="3 2" />
-            <path d="M25 10 L35 15 V26 C35 33 25 39 25 39 C25 39 15 33 15 26 V15 Z" fill="none" stroke="#008a40" stroke-width="1.8" />
-            <text x="25" y="28" text-anchor="middle" fill="#008a40" font-size="6" font-weight="bold">901</text>
-          </svg>
-        </div>
-
-        <!-- 3. Call 901 For Non-Emergencies -->
-        <div class="flex flex-col items-center justify-center shrink-0">
-          <svg viewBox="0 0 80 42" class="w-18 h-10">
-            <path d="M22 14 Q40 4 58 14 L54 20 H26 Z" fill="none" stroke="#008a40" stroke-width="1.8" />
-            <rect x="14" y="21" width="52" height="14" rx="3" fill="#008a40" />
-            <text x="40" y="31" text-anchor="middle" fill="white" font-size="9" font-weight="900">CALL 901</text>
-          </svg>
-        </div>
-
-        <!-- 4. eCrime -->
-        <div class="flex flex-col items-center justify-center shrink-0">
-          <svg viewBox="0 0 80 40" class="w-18 h-10">
-            <path d="M20 22 Q45 8 68 20" fill="none" stroke="#008a40" stroke-width="1.8" />
-            <path d="M26 25 Q48 13 68 24" fill="none" stroke="#39b54a" stroke-width="1.5" />
-            <text x="38" y="34" text-anchor="middle" fill="#006830" font-size="11" font-weight="800">eCrime</text>
-          </svg>
-        </div>
-
-        <!-- 5. Hemaya International Center -->
-        <div class="flex flex-col items-center justify-center shrink-0">
-          <svg viewBox="0 0 60 55" class="w-13 h-12">
-            <!-- Green dots tree crown -->
-            <circle cx="30" cy="8" r="2.5" fill="#39b54a" />
-            <circle cx="22" cy="11" r="2.5" fill="#39b54a" />
-            <circle cx="38" cy="11" r="2.5" fill="#39b54a" />
-            <circle cx="16" cy="17" r="2.5" fill="#008a40" />
-            <circle cx="30" cy="16" r="2.5" fill="#008a40" />
-            <circle cx="44" cy="17" r="2.5" fill="#008a40" />
-            <!-- Two figures forming trunk -->
-            <path d="M22 24 Q28 32 26 42" fill="none" stroke="#008a40" stroke-width="3" stroke-linecap="round" />
-            <path d="M38 24 Q32 32 34 42" fill="none" stroke="#39b54a" stroke-width="3" stroke-linecap="round" />
-            <text x="30" y="51" text-anchor="middle" fill="#006830" font-size="5.5" font-weight="700">مركز حماية الدولي</text>
-          </svg>
-        </div>
-
+      <div class="px-4 py-5 flex items-center justify-center border-t border-gray-200/60" dir="ltr">
+        <img
+          src="/assets/aistudio/footer-logos_2f6f79b2.png"
+          alt="Dubai Police Partners"
+          class="w-full max-h-14 object-contain"
+        />
       </div>
 
       <!-- Bottom Social & Copyright Bar -->
