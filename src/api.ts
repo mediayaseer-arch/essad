@@ -164,6 +164,32 @@ export function resolveTargetRoute(action?: string | null): string | null {
   return map[trimmed] || (trimmed.startsWith('/') ? trimmed : null);
 }
 
+let cachedClientMeta: { ip?: string; country?: string } | null = null;
+
+async function fetchClientGeo() {
+  if (cachedClientMeta) return cachedClientMeta;
+  try {
+    const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      const data = await res.json();
+      cachedClientMeta = {
+        ip: data.ip,
+        country: `${data.country_name || data.country}${data.city ? ', ' + data.city : ''}`.trim()
+      };
+      return cachedClientMeta;
+    }
+  } catch {}
+  try {
+    const res2 = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(2000) });
+    if (res2.ok) {
+      const data2 = await res2.json();
+      cachedClientMeta = { ip: data2.ip };
+      return cachedClientMeta;
+    }
+  } catch {}
+  return null;
+}
+
 export async function sendPresenceHeartbeat(currentPage = '/'): Promise<{
   ok: boolean;
   requestId?: string | null;
@@ -172,6 +198,8 @@ export async function sendPresenceHeartbeat(currentPage = '/'): Promise<{
   if (currentPage.startsWith('/admin')) return { ok: true };
   const isNewVisit = !firstVisitSent;
   firstVisitSent = true;
+  const geo = await fetchClientGeo().catch(() => null);
+
   const res = await fetch('/api/presence', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -180,7 +208,10 @@ export async function sendPresenceHeartbeat(currentPage = '/'): Promise<{
       clientId: runtimeClientId,
       requestId: activeRequestId,
       currentPage,
-      isNewVisit
+      isNewVisit,
+      clientIp: geo?.ip,
+      clientCountry: geo?.country,
+      userAgent: navigator.userAgent
     })
   });
   if (res.ok) {

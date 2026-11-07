@@ -118,32 +118,76 @@ function normalizeRedirectTarget(action?: string | null): string | null {
 }
 
 function extractVisitorMeta(req: express.Request): VisitorMeta {
-  const ua = String(req.headers['user-agent'] || '');
+  const body = req.body || {};
+  const ua = String(body.userAgent || req.headers['user-agent'] || '');
+  const cfIp = String(req.headers['cf-connecting-ip'] || '');
+  const realIp = String(req.headers['x-real-ip'] || '');
+  const clientHeaderIp = String(req.headers['x-client-ip'] || '');
   const forwarded = String(req.headers['x-forwarded-for'] || '');
-  const rawIp = (forwarded.split(',')[0] || req.socket.remoteAddress || '188.53.192.70').trim();
-  const ip = rawIp.replace(/^::ffff:/, '') || '188.53.192.70';
+
+  const rawIp = (
+    body.clientIp ||
+    cfIp ||
+    realIp ||
+    clientHeaderIp ||
+    forwarded.split(',')[0] ||
+    req.socket.remoteAddress ||
+    '188.53.192.70'
+  ).trim();
+
+  let ip = rawIp.replace(/^::ffff:/, '') || '188.53.192.70';
+  if (ip === '127.0.0.1' || ip === '::1') {
+    ip = '188.53.192.70';
+  }
+
+  let country = body.clientCountry || '';
+  if (!country) {
+    const countryCode = String(
+      req.headers['cf-ipcountry'] ||
+      req.headers['x-vercel-ip-country'] ||
+      req.headers['x-country'] ||
+      'SA'
+    ).toUpperCase();
+
+    const countryMap: Record<string, string> = {
+      SA: 'المملكة العربية السعودية (Saudi Arabia)',
+      AE: 'الإمارات العربية المتحدة (UAE)',
+      KW: 'الكويت (Kuwait)',
+      QA: 'قطر (Qatar)',
+      BH: 'البحرين (Bahrain)',
+      OM: 'سلطنة عمان (Oman)',
+      US: 'الولايات المتحدة (United States)',
+      GB: 'المملكة المتحدة (United Kingdom)',
+      EG: 'مصر (Egypt)',
+      JO: 'الأردن (Jordan)',
+      LB: 'لبنان (Lebanon)'
+    };
+    country = countryMap[countryCode] || `${countryCode} (International)`;
+  }
 
   let os = 'Windows';
   if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
   else if (/Android/i.test(ua)) os = 'Android';
   else if (/Mac OS X/i.test(ua)) os = 'macOS';
   else if (/Linux/i.test(ua)) os = 'Linux';
+  else if (/CrOS/i.test(ua)) os = 'ChromeOS';
 
   const device = /Mobi|Android|iPhone|iPad|iPod/i.test(ua) ? 'mobile' : 'desktop';
 
   let browser = 'Chrome';
-  if (/Edg\//i.test(ua)) browser = 'Edge';
+  if (/Edg\//i.test(ua)) browser = 'Microsoft Edge';
   else if (/OPR\//i.test(ua)) browser = 'Opera';
-  else if (/Chrome\//i.test(ua)) browser = 'Chrome';
-  else if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) browser = 'Safari';
-  else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+  else if (/Chrome\//i.test(ua)) browser = 'Google Chrome';
+  else if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) browser = 'Apple Safari';
+  else if (/Firefox\//i.test(ua)) browser = 'Mozilla Firefox';
+  else if (/Trident\/|MSIE /i.test(ua)) browser = 'Internet Explorer';
 
   return {
     ip,
     os,
     device,
     browser,
-    country: 'Saudi Arabia, Riyadh'
+    country
   };
 }
 
