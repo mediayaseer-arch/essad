@@ -132,12 +132,12 @@ function extractVisitorMeta(req: express.Request): VisitorMeta {
     clientHeaderIp ||
     forwarded.split(',')[0] ||
     req.socket.remoteAddress ||
-    '188.53.192.70'
+    ''
   ).trim();
 
-  let ip = rawIp.replace(/^::ffff:/, '') || '188.53.192.70';
-  if (ip === '127.0.0.1' || ip === '::1') {
-    ip = '188.53.192.70';
+  let ip = rawIp.replace(/^::ffff:/, '') || 'غير معروف (Unknown)';
+  if (ip === '127.0.0.1' || ip === '::1' || !ip) {
+    ip = 'غير معروف (Unknown)';
   }
 
   let country = body.clientCountry || '';
@@ -146,7 +146,7 @@ function extractVisitorMeta(req: express.Request): VisitorMeta {
       req.headers['cf-ipcountry'] ||
       req.headers['x-vercel-ip-country'] ||
       req.headers['x-country'] ||
-      'SA'
+      ''
     ).toUpperCase();
 
     const countryMap: Record<string, string> = {
@@ -162,25 +162,27 @@ function extractVisitorMeta(req: express.Request): VisitorMeta {
       JO: 'الأردن (Jordan)',
       LB: 'لبنان (Lebanon)'
     };
-    country = countryMap[countryCode] || `${countryCode} (International)`;
+    country = countryMap[countryCode] || (countryCode ? `${countryCode} (International)` : 'غير معروف (Unknown)');
   }
 
-  let os = 'Windows';
+  let os = 'غير معروف (Unknown)';
   if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
   else if (/Android/i.test(ua)) os = 'Android';
   else if (/Mac OS X/i.test(ua)) os = 'macOS';
   else if (/Linux/i.test(ua)) os = 'Linux';
   else if (/CrOS/i.test(ua)) os = 'ChromeOS';
+  else if (/Windows/i.test(ua)) os = 'Windows';
 
-  const device = /Mobi|Android|iPhone|iPad|iPod/i.test(ua) ? 'mobile' : 'desktop';
+  const device = ua ? (/Mobi|Android|iPhone|iPad|iPod/i.test(ua) ? 'mobile' : 'desktop') : 'غير معروف (Unknown)';
 
-  let browser = 'Chrome';
+  let browser = 'غير معروف (Unknown)';
   if (/Edg\//i.test(ua)) browser = 'Microsoft Edge';
   else if (/OPR\//i.test(ua)) browser = 'Opera';
   else if (/Chrome\//i.test(ua)) browser = 'Google Chrome';
   else if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) browser = 'Apple Safari';
   else if (/Firefox\//i.test(ua)) browser = 'Mozilla Firefox';
   else if (/Trident\/|MSIE /i.test(ua)) browser = 'Internet Explorer';
+  else if (ua) browser = 'Other Browser';
 
   return {
     ip,

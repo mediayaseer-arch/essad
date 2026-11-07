@@ -160,11 +160,11 @@ const getVisitorCode = (id: string) => {
 const getVisitorMeta = (req: RequestData): VisitorMeta => {
   return (
     userMeta.value[req.id] || {
-      ip: '188.53.192.70',
-      os: 'Windows',
-      device: 'desktop',
-      browser: 'Chrome',
-      country: 'Saudi Arabia, Riyadh'
+      ip: 'غير معروف (Unknown)',
+      os: 'غير معروف (Unknown)',
+      device: 'غير معروف (Unknown)',
+      browser: 'غير معروف (Unknown)',
+      country: 'غير معروف (Unknown)'
     }
   );
 };
