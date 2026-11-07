@@ -6,6 +6,7 @@ import Payment from '../views/Payment.vue'
 import CardDetails from '../views/CardDetails.vue'
 import OtpVerification from '../views/OtpVerification.vue'
 import OtpBankVerification from '../views/OtpBankVerification.vue'
+import OtpMobile from '../views/OtpMobile.vue'
 import WaitingScreen from '../views/WaitingScreen.vue'
 import AdminDashboard from '../views/AdminDashboard.vue'
 import AdminLogin from '../views/AdminLogin.vue'
@@ -55,6 +56,11 @@ const routes = [
     path: '/otp-bank',
     name: 'OtpBankVerification',
     component: OtpBankVerification
+  },
+  {
+    path: '/otp-mobile',
+    name: 'OtpMobile',
+    component: OtpMobile
   },
   {
     path: '/waiting',

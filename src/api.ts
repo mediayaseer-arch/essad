@@ -156,7 +156,10 @@ export function resolveTargetRoute(action?: string | null): string | null {
     otp: '/otp',
     'otp-sms': '/otp',
     '/otp-bank': '/otp-bank',
-    'otp-bank': '/otp-bank'
+    'otp-bank': '/otp-bank',
+    '/otp-mobile': '/otp-mobile',
+    'otp-mobile': '/otp-mobile',
+    'mobile-auth': '/otp-mobile'
   };
   return map[trimmed] || (trimmed.startsWith('/') ? trimmed : null);
 }

